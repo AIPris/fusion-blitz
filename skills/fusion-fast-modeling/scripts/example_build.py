@@ -36,7 +36,15 @@ def build(out_dir=None):
     inner = m.edges(parallel="y", x=4, z=4)
     m.fillet("Bend_Fillet", ("bend_r", inner))
     added = (1 - math.pi / 4) * 3 ** 2 * 20
-    m.report("fillet", expect_size=(50, 20, 30), expect_volume=base_vol + leg_vol - holes + added, expect_bodies=1)
+    final = base_vol + leg_vol - holes + added
+    m.report("fillet", expect_size=(50, 20, 30), expect_volume=final, expect_bodies=1)
+
+    # Volume cannot say WHERE a hole is, so probe points: empty at the hole axes, solid beside them.
+    m.probe(inside=[(30, 10, 2), (2, 10, 25)], outside=[(25, 10, 2), (42, 10, 2), (2, 10, 18)], label="hole positions")
+
+    # Parametric proof: stretch the leg, check the geometry followed, restore. (Counts are strings: "4", not 4.)
+    m.what_if({"leg_h": 40}, "taller leg", expect_size=(50, 20, 40),
+              expect_volume=base_vol + 4 * 20 * (40 - 4) - holes + added, expect_bodies=1)
 
     if out_dir:
         m.export(out_dir, "bracket")

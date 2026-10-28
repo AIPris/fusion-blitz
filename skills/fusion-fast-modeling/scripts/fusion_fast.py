@@ -36,6 +36,7 @@ NUDGE = 0.013  # mm
 # once a join feature has been added to the body, even far from the join; a finite distance does not.
 THROUGH_MM = 1000
 REGISTRY = "_fusion_fast_documents"
+SNAPSHOTS = "_fusion_fast_snapshots"  # per model: the other open documents (name, saved, modified) when it was made
 AXIS = {"x": 0, "y": 1, "z": 2}
 PLANE_NORMAL = {"xy": 2, "xz": 1, "yz": 0}
 OPERATIONS = {"new": adsk.fusion.FeatureOperations.NewBodyFeatureOperation,
@@ -67,9 +68,20 @@ def vi(value):
 
 
 def registry():
+    """name -> Document of every model ff.new() made. Entries whose document was closed (by us, the user or the
+    grader) are dropped here, so a stale name never blocks a rebuild."""
     if not hasattr(builtins, REGISTRY):
         setattr(builtins, REGISTRY, {})
-    return getattr(builtins, REGISTRY)
+    documents = getattr(builtins, REGISTRY)
+    for name in [n for n, d in documents.items() if not d.isValid]:
+        documents.pop(name)
+    return documents
+
+
+def snapshots():
+    if not hasattr(builtins, SNAPSHOTS):
+        setattr(builtins, SNAPSHOTS, {})
+    return getattr(builtins, SNAPSHOTS)
 
 
 def open_documents():
@@ -89,9 +101,11 @@ def new(name, replace=False):
     if any(d.name == name for d in app.documents):
         raise RuntimeError(f"A document called {name!r} is already open; choose a new name or pass replace=True "
                            "(only works for models made by ff.new)")
+    snapshot = open_documents()
     doc = app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
     doc.name = name
     registry()[name] = doc
+    snapshots()[name] = snapshot
     model = Model(doc)
     model.design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     model.design.fusionUnitsManager.distanceDisplayUnits = adsk.fusion.DistanceUnits.MillimeterDistanceUnits
@@ -406,10 +420,44 @@ class Model:
                 target.expression = original
                 self.design.computeAll()
 
-    def report(self, stage="", expect_size=None, expect_volume=None, expect_bodies=None, tol=0.01, strict=True):
-        """Checkpoint: print one JSON line (bodies, size, volume, timeline health, unconstrained sketches) and raise
-        if a check fails, naming `stage` so a failure says where it happened. expect_size = world bounding box
-        (x, y, z) mm of all bodies; expect_volume in mm3 (1 % slack)."""
+    def probe(self, inside=(), outside=(), label="probe"):
+        """Point-in-solid test in world mm: every `inside` point must be material, every `outside` point empty
+        (a point exactly on a surface counts as neither). Raises listing the wrong points. Use it where a
+        volume cannot tell two layouts apart (which side a slot is on, hole depth, wall beside a post)."""
+        def state(point):
+            location = P(*[c * CM for c in point])
+            states = [body.pointContainment(location) for body in self.root.bRepBodies]
+            if adsk.fusion.PointContainment.PointInsidePointContainment in states:
+                return "inside"
+            return "outside" if all(s == adsk.fusion.PointContainment.PointOutsidePointContainment for s in states) else "on surface"
+        wrong = [f"{p} is {state(p)}, expected {want}" for want, points in (("inside", inside), ("outside", outside))
+                 for p in points if state(p) != want]
+        print(f"{label}: {len(list(inside)) + len(list(outside)) - len(wrong)} of {len(list(inside)) + len(list(outside))} points as expected")
+        if wrong:
+            raise RuntimeError(f"[{label}] " + "; ".join(wrong))
+
+    def what_if(self, changes, stage="what_if", **expect):
+        """Parametric proof: set parameters (e.g. {"box_x": 80, "slot_count": "4"}), regenerate, run report(**expect),
+        then restore the originals. Proves the model follows its parameters instead of holding frozen numbers."""
+        parameters = {name: self.design.userParameters.itemByName(name) for name in changes}
+        originals = {name: parameter.expression for name, parameter in parameters.items()}
+        try:
+            for name, value in changes.items():
+                parameters[name].expression = expr(value)
+            self.design.computeAll()
+            return self.report(stage, **expect)
+        finally:
+            for name, text in originals.items():
+                parameters[name].expression = text
+            self.design.computeAll()
+
+    def report(self, stage="", expect_size=None, expect_volume=None, expect_bodies=None, tol=0.01, vol_tol=0.002,
+               strict=True):
+        """Checkpoint: print one JSON line (bodies, size, volume, cylinder radii, timeline health, unconstrained
+        sketches, a warning if the user's other documents changed) and raise if a check fails, naming `stage` so a
+        failure says where it happened.
+        expect_size = world bounding box (x, y, z) mm of all bodies, within `tol` mm; expect_volume in mm3 within
+        `vol_tol` (0.2 % by default: tight enough to see a missing hole or fillet, so compute it by hand)."""
         import json
         bodies = []
         lo, hi = [1e18] * 3, [-1e18] * 3
@@ -433,10 +481,23 @@ class Model:
             problems.append(f"size {[round(s, 3) for s in size]} != expected {list(expect_size)}")
         if expect_volume is not None:
             total = sum(b["volume_mm3"] for b in bodies)
-            if abs(total - expect_volume) > 0.01 * expect_volume:
-                problems.append(f"volume {total} mm3 != expected {expect_volume}")
+            if abs(total - expect_volume) > vol_tol * expect_volume:
+                problems.append(f"volume {total} mm3 != expected {round(expect_volume, 2)} (off {abs(total - expect_volume):.2f})")
+        cylinders = {}
+        for body in self.root.bRepBodies:
+            for face in body.faces:
+                cylinder = adsk.core.Cylinder.cast(face.geometry)
+                if cylinder:
+                    key = str(round(cylinder.radius / CM, 3))
+                    cylinders[key] = cylinders.get(key, 0) + 1
+        now = open_documents()
+        before = snapshots().get(self.doc.name)
+        # A warning, not a problem: the user may legitimately save or close their own documents while this runs.
+        changed = [d for d in (before or []) if d not in now]
+        warnings = [f"other documents changed or closed since this model was made: {changed}"] if changed else []
         result = {"stage": stage, "document": self.doc.name, "bodies": bodies, "size_mm": [round(s, 3) for s in size],
-                  "features": timeline.count, "problems": problems}
+                  "cylinder_radii_mm": cylinders, "features": timeline.count, "problems": problems,
+                  "warnings": warnings}
         print(json.dumps(result))
         if strict and problems:
             raise RuntimeError(f"[{stage or 'report'}] " + "; ".join(problems))
@@ -469,13 +530,17 @@ class Model:
         return written
 
     def views(self, outdir, stem, names=("iso",), size=(1200, 900)):
-        """Save PNG views (iso, top, front, right, back, left, bottom) of the model with world Z up.
+        """Save PNG views of the model with world Z up: iso, iso_back, iso_left, iso_left_back, top, bottom, front,
+        back, right, left. "iso" looks from +x, -y, +z (the -y side is the "front"); pick "iso_back" when the
+        interesting side faces +y, e.g. something that sticks out toward +y.
 
         Explicit world-axis cameras are used on purpose: Fusion's own view-cube names assume its up-axis
         preference (often Y), which shows Z-up models turned on their side."""
-        directions = {"iso": ((1, -1, 1), (0, 0, 1)), "top": ((0, 0, 1), (0, 1, 0)), "bottom": ((0, 0, -1), (0, 1, 0)),
-                      "front": ((0, -1, 0), (0, 0, 1)), "back": ((0, 1, 0), (0, 0, 1)),
-                      "right": ((1, 0, 0), (0, 0, 1)), "left": ((-1, 0, 0), (0, 0, 1))}
+        up = (0, 0, 1)
+        directions = {"iso": ((1, -1, 1), up), "iso_back": ((1, 1, 1), up), "iso_left": ((-1, -1, 1), up),
+                      "iso_left_back": ((-1, 1, 1), up), "top": ((0, 0, 1), (0, 1, 0)),
+                      "bottom": ((0, 0, -1), (0, 1, 0)), "front": ((0, -1, 0), up), "back": ((0, 1, 0), up),
+                      "right": ((1, 0, 0), up), "left": ((-1, 0, 0), up)}
         self.doc.activate()
         folder = Path(outdir)
         folder.mkdir(parents=True, exist_ok=True)
