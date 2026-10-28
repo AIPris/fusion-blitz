@@ -5,6 +5,7 @@ Nothing here trusts the agent's own report: geometry, constraints, parameters, f
 open document are read back from Fusion and the disk.
 """
 import json
+import math
 import re
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import adsk.core
 import adsk.fusion
 
 CM = 0.1
+ACCURACY = adsk.fusion.CalculationAccuracy.VeryHighCalculationAccuracy   # body.volume alone is about 0.09 % low on lofted and toroidal parts
 
 
 def snapshot(path):
@@ -72,13 +74,33 @@ def grade(spec_path):
             add("Part sits where requested: bounding-box minimum corner (+/-0.05 mm)",
                 all(abs(a - b) <= 0.05 for a, b in zip(low, spec["min"])),
                 f"min {[round(s, 3) for s in low]} vs {spec['min']}")
-            volume = body.volume / CM ** 3
+            props = body.getPhysicalProperties(ACCURACY)
+            volume = props.volume / CM ** 3
             error = abs(volume - spec["volume"]) / spec["volume"]
-            add("Volume matches the reference model within 0.2 % (all features present, right size and place)",
-                error <= 0.002, f"{volume:.2f} mm3 vs reference {spec['volume']:.2f} ({error * 100:.3f} % off)")
+            for tolerance in spec.get("volume_tol", [0.002]):
+                add(f"Volume matches the reference model within {tolerance * 100:g} % (all features present, right size and place)",
+                    error <= tolerance, f"{volume:.2f} mm3 vs reference {spec['volume']:.2f} ({error * 100:.3f} % off)")
             counts = cylinder_counts(body)
-            add("Cylindrical faces (holes, posts, fillets) match the reference by radius",
-                counts == spec["cylinders"], f"{counts} vs reference {spec['cylinders']}")
+            if "cylinders" in spec:
+                add("Cylindrical faces (holes, posts, fillets) match the reference by radius",
+                    counts == spec["cylinders"], f"{counts} vs reference {spec['cylinders']}")
+            if "cylinder_radii" in spec:      # independent of how a kernel splits faces, for parts with many round features
+                radii = sorted(float(r) for r in counts)
+                add("The set of cylindrical-face radii matches the reference", radii == spec["cylinder_radii"],
+                    f"{radii} vs reference {spec['cylinder_radii']}")
+            if "com" in spec:                 # a feature in the wrong place moves the centre of mass; volume cannot see it
+                centre = [c / CM for c in props.centerOfMass.asArray()]
+                apart = math.dist(centre, spec["com"])
+                add("Centre of mass within 0.1 mm of the reference (features in the right places)", apart <= 0.1,
+                    f"{[round(c, 3) for c in centre]} vs reference {spec['com']} ({apart:.3f} mm apart)")
+            if "probes" in spec:              # points that must be solid or empty: a hole, rib or lug in the wrong place fails here
+                states = {"inside": adsk.fusion.PointContainment.PointInsidePointContainment,
+                          "outside": adsk.fusion.PointContainment.PointOutsidePointContainment}
+                wrong = [[state, point] for state, points in spec["probes"].items() for point in points
+                         if body.pointContainment(adsk.core.Point3D.create(*[c * CM for c in point])) != states[state]]
+                total = sum(len(points) for points in spec["probes"].values())
+                add(f"All {total} probe points are solid or empty as expected (features in the right places)", not wrong,
+                    f"{len(wrong)} wrong, first: {wrong[:5]}" if wrong else "all as expected")
         timeline = design.timeline
         bad = [timeline.item(i).name for i in range(timeline.count)
                if timeline.item(i).healthState != adsk.fusion.FeatureHealthStates.HealthyFeatureHealthState]

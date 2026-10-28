@@ -9,7 +9,10 @@ import json
 import sys
 from pathlib import Path
 
+import spool_probes
+
 SKILL = Path(__file__).resolve().parents[2] / "skills" / "fusion-fast-modeling"
+SPEC_KEYS = ("size", "min", "volume", "volume_tol", "cylinders", "cylinder_radii", "com", "probes", "min_params")   # what the grader reads
 
 EVALS = [
     {"id": 1, "name": "comb", "stem": "comb", "size": [90, 28, 12], "min": [0, 0, 0], "volume": 21925.588,
@@ -39,6 +42,47 @@ EVALS = [
               "front wall only (the wall at y = 0), the bottom of the slots at z = 8 mm, pitch 6 mm, the set centred "
               "along x. Round the four vertical outside corner edges of the box with R5."),
      "expected_output": "One solid open box 70x50x30 with 4 posts + pilot holes, 6 front vent slots and R5 corners."},
+    {"id": 4, "name": "spool", "stem": "spool", "size": [405, 200, 498], "min": [0, -100, -100],
+     "volume": 1719679.341, "volume_tol": [0.001, 0.00005], "com": [179.489, 3.562, 129.911], "min_params": 25,
+     "probes": spool_probes.probes(),
+     "cylinder_radii": [4.0, 6.0, 9.0, 12.5, 15.0, 25.0, 25.15, 30.15, 33.0, 39.0, 39.45, 44.45, 52.0, 57.0, 82.5, 100.0],
+     "task": (
+              "Model a flanged eccentric reducing elbow (a piping spool) as one solid body. Millimetres, Z up. The "
+              "centreline lies in the XZ plane (y = 0) except for the offset of the outlet. The inlet face is the plane x = "
+              "0 and the centreline starts at the origin.\n\nPipe: the main pipe is 88.9 mm outside diameter with a 78.9 mm "
+              "bore (5 mm wall); the reduced pipe is 60.3 mm outside diameter with a 50.3 mm bore. The bore runs clear from "
+              "the inlet face to the outlet face and nothing (boss, ribs, lugs) intrudes into it.\n\nCentreline, in order: "
+              "(1) straight along +X from x = 0 to x = 160; (2) a 90 degree bend of radius 150 turning towards +Z, arc "
+              "centre (160, 0, 150), from (160, 0, 0) to (310, 0, 150); (3) straight along +Z at x = 310 from z = 150 to z "
+              "= 250; (4) an eccentric reducer from z = 250 to z = 330: a straight-sided (ruled, no guide rails) transition "
+              "from the 88.9 mm circle centred on x = 310, y = 0 to the 60.3 mm circle centred on x = 310, y = 14.3, so the "
+              "outer surfaces line up along the +Y side; the bore makes the same transition from 78.9 mm to 50.3 mm with "
+              "the same two circle centres; (5) straight along +Z at x = 310, y = 14.3 from z = 330 to z = 398, which is "
+              "the outlet face.\n\nInlet flange (axis along X): a disc of 200 mm diameter, 20 mm thick (x = 0 to 20), with "
+              "8 holes of 18 mm diameter on a 160 mm bolt circle at 22.5 + k * 45 degrees measured from +Z in the YZ plane; "
+              "an annular groove in the x = 0 face, 104 mm inner and 114 mm outer diameter, 3 mm deep; a conical weld-neck "
+              "hub from 116 mm diameter at x = 20 to the 88.9 mm pipe diameter at x = 60; 1.5 mm x 45 degree chamfers on "
+              "both outer edges of the disc.\n\nOutlet flange (axis along Z through x = 310, y = 14.3): a disc of 165 mm "
+              "diameter, 18 mm thick (z = 380 to 398), with 4 holes of 18 mm diameter on a 125 mm bolt circle at 45 + k * "
+              "90 degrees measured from +X in the XY plane; an annular groove in the z = 398 face, 66 mm inner and 78 mm "
+              "outer diameter, 2.5 mm deep; 1.5 mm x 45 degree chamfers on both outer edges of the disc. Four gusset ribs "
+              "under the disc, each an 8 mm thick right triangle lying in a plane that contains the outlet axis, at 0, 90, "
+              "180 and 270 degrees (parallel to the XZ and YZ planes): the right angle is 28 mm from the outlet axis "
+              "(inside the pipe wall, so the rib fuses with it) on the underside of the disc (z = 380), one leg runs 32 mm "
+              "outwards along the underside (to 60 mm from the axis), the other runs 40 mm down along the pipe (to z = "
+              "340).\n\nSensor boss: a 30 mm diameter cylinder whose axis passes through the centreline point of the bend "
+              "at 45 degrees, (266.066, 0, 43.934), and points radially away from the bend centre, direction (0.7071, 0, "
+              "-0.7071). It runs from that centreline point out to 70 mm along its axis, with a 1.5 mm x 45 degree chamfer "
+              "on the edge of its free end. A 12 mm diameter hole along the axis from the free end down to 30 mm from the "
+              "centreline point opens into the bore.\n\nLifting lugs: two 10 mm thick plates (y = -5 to +5) on the vertical "
+              "run, in the XZ plane, z = 175 to 225, from x = 240 to x = 380 (they pass through the pipe axis), each end "
+              "finished with a semicircle of radius 25 centred at (380, 200) and (240, 200), so the plates reach x = 215 "
+              "and x = 405. A 25 mm diameter hole through each plate at those centres. Where the plates meet the outside of "
+              "the pipe they are blended with 4 mm fillets along the whole junction (both flat faces and the top and bottom "
+              "faces).\n\nAdd nothing else: no other fillets, chamfers, threads or welds."),
+     "expected_output": "One solid spool: inlet and outlet flanges with bolt holes, grooves and chamfers, a weld-neck hub, "
+                        "a 90 degree bend, an eccentric reducer, a 45 degree sensor boss with a hole, four gusset ribs and "
+                        "two filleted lifting lugs, with a clear bore."},
 ]
 
 COMMON = """You are modelling a part in Autodesk Fusion 360 on the user's PC through the MCP tools named mcp__fusion-local__* (they are deferred tools: load them first with ToolSearch, for example query "select:mcp__fusion-local__fusion_mcp_execute,mcp__fusion-local__fusion_mcp_read"; mcp__fusion-local__fusion_mcp_execute with featureType "script" runs Fusion Python scripts).
@@ -83,8 +127,7 @@ def main(iteration, bench, docs_before):
             out.mkdir(parents=True, exist_ok=True)
             suffix = "skill" if config == "with_skill" else "base"
             spec = {"doc": f"ZZ_bench_{ev['name']}_{suffix}", "stem": ev["stem"], "out_dir": str(out), "run_dir": str(run),
-                    "size": ev["size"], "min": ev["min"], "volume": ev["volume"], "cylinders": ev["cylinders"],
-                    "min_params": ev["min_params"], "docs_before": docs_before}
+                    "docs_before": docs_before, **{key: ev[key] for key in SPEC_KEYS if key in ev}}
             (run / "spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
             (run / "prompt.txt").write_text(prompt(ev, config, str(out)), encoding="utf-8")
     print("workspace ready:", bench / f"iteration-{iteration}")

@@ -3,6 +3,7 @@ volume / bounding box / hole counts for grading - never shown to the agents unde
 import json
 
 import adsk.core
+import adsk.fusion
 
 import fusion_fast as ff
 
@@ -79,7 +80,8 @@ def facts(m_name):
         if cyl:
             key = round(cyl.radius / ff.CM, 3)
             radii[key] = radii.get(key, 0) + 1
-    return {"volume_mm3": round(body.volume / ff.CM ** 3, 3), "faces": body.faces.count,
+    volume = body.getPhysicalProperties(adsk.fusion.CalculationAccuracy.VeryHighCalculationAccuracy).volume   # as grade.py reads it
+    return {"volume_mm3": round(volume / ff.CM ** 3, 3), "faces": body.faces.count,
             "cylinder_faces_by_radius_mm": radii}
 
 
