@@ -112,7 +112,7 @@ def draw(results):
 # ---- README tables ---------------------------------------------------------------------------------------------
 
 def tables(results):
-    out = ["| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls (failed) | Checks passed |",
+    out = ["| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls, 3 tasks (failed) | Checks passed, 3 tasks |",
            "|---|---:|---:|---:|---:|---:|"]
     for config, label in CONFIGS.items():
         r = results["mean"][config]

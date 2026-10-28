@@ -8,15 +8,15 @@
 **`fusion-fast-modeling`** is an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that builds,
 edits and exports parametric models in **Autodesk Fusion 360** through Fusion's built-in **MCP server** (the Model
 Context Protocol endpoint of the desktop app). It gives Claude a tested Python helper for the Fusion API, a one-file
-build loop and numeric checkpoints, so an AI-assisted CAD session lands on a correct, fully parametric part in one or
-two script calls instead of a dozen.
+build loop and numeric checkpoints, so an AI-assisted CAD session lands on a correct, fully parametric part in a few
+script calls instead of a trial-and-error loop (1–4 calls per part with the skill, 5–12 without, in the benchmark).
 
 In a three-task benchmark, agents with the skill built the same parts in **124 s instead of 474 s (3.8× faster)**,
-used **about 30 % fewer tokens**, and needed **7 Fusion script calls instead of 24**.
+used **about 30 % fewer tokens**, and needed **7 Fusion script calls instead of 24** across the three tasks.
 
 ![Bar chart of the mean time to build three Fusion 360 parts: 474 s without the skill, 282 s with skill v1, 124 s with skill v2](benchmarks/time-per-task.svg)
 
-| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls (failed) | Checks passed |
+| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls, 3 tasks (failed) | Checks passed, 3 tasks |
 |---|---:|---:|---:|---:|---:|
 | No skill | 474 s | – | 126,836 | 24 (5) | 36/39 |
 | Skill v1 | 282 s | 1.7× faster | 104,409 | 7 (1) | 39/39 |
@@ -116,7 +116,7 @@ The three benchmark parts, as built by Claude with the skill. Each part has a bu
 
 ## How a build looks
 
-A build is a short script of named parameters, features and checkpoints (from
+A build is a short script of named parameters, features and checkpoints (adapted from
 [`examples/build_comb.py`](examples/build_comb.py)):
 
 ```python

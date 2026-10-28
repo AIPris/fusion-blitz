@@ -10,7 +10,7 @@ graded afterwards by script, not by the agent's own report.
 
 Mean over the three tasks:
 
-| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls (failed) | Checks passed |
+| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls, 3 tasks (failed) | Checks passed, 3 tasks |
 |---|---:|---:|---:|---:|---:|
 | No skill | 474 s | – | 126,836 | 24 (5) | 36/39 |
 | Skill v1 | 282 s | 1.7× faster | 104,409 | 7 (1) | 39/39 |
