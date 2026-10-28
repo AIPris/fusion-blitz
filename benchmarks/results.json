@@ -1,0 +1,132 @@
+{
+  "tasks": {
+    "comb": {
+      "no-skill": {
+        "seconds": 297.6,
+        "tokens": 110784,
+        "fusion_calls": 5,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v1": {
+        "seconds": 208.3,
+        "tokens": 98265,
+        "fusion_calls": 3,
+        "fusion_calls_failed": 1,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.42870859337494,
+        "token_saving": 0.11300368284228768
+      },
+      "skill-v2": {
+        "seconds": 164.1,
+        "tokens": 86604,
+        "fusion_calls": 4,
+        "fusion_calls_failed": 1,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.8135283363802561,
+        "token_saving": 0.21826256499133445
+      }
+    },
+    "hook": {
+      "no-skill": {
+        "seconds": 410.0,
+        "tokens": 115872,
+        "fusion_calls": 7,
+        "fusion_calls_failed": 1,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v1": {
+        "seconds": 341.7,
+        "tokens": 108360,
+        "fusion_calls": 2,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.199882938249927,
+        "token_saving": 0.06483015741507869
+      },
+      "skill-v2": {
+        "seconds": 87.2,
+        "tokens": 85436,
+        "fusion_calls": 1,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 4.701834862385321,
+        "token_saving": 0.2626691521679094
+      }
+    },
+    "box": {
+      "no-skill": {
+        "seconds": 713.0,
+        "tokens": 153853,
+        "fusion_calls": 12,
+        "fusion_calls_failed": 4,
+        "checks_passed": 10,
+        "checks_total": 13,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v1": {
+        "seconds": 296.1,
+        "tokens": 106602,
+        "fusion_calls": 2,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 2.4079702803107055,
+        "token_saving": 0.30711783325642006
+      },
+      "skill-v2": {
+        "seconds": 122.0,
+        "tokens": 96143,
+        "fusion_calls": 2,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 5.844262295081967,
+        "token_saving": 0.37509830812528844
+      }
+    }
+  },
+  "mean": {
+    "no-skill": {
+      "seconds": 473.53333333333336,
+      "tokens": 126836.33333333333,
+      "fusion_calls": 24,
+      "fusion_calls_failed": 5,
+      "checks_passed": 36,
+      "checks_total": 39,
+      "speedup": 1.0,
+      "token_saving": 0.0
+    },
+    "skill-v1": {
+      "seconds": 282.03333333333336,
+      "tokens": 104409,
+      "fusion_calls": 7,
+      "fusion_calls_failed": 1,
+      "checks_passed": 39,
+      "checks_total": 39,
+      "speedup": 1.6789977544025527,
+      "token_saving": 0.17682104759677164
+    },
+    "skill-v2": {
+      "seconds": 124.43333333333334,
+      "tokens": 89394.33333333333,
+      "fusion_calls": 7,
+      "fusion_calls_failed": 1,
+      "checks_passed": 39,
+      "checks_total": 39,
+      "speedup": 3.8055183498526657,
+      "token_saving": 0.29519932511451763
+    }
+  }
+}

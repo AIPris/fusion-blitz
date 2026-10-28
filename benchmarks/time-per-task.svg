@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 516" width="760" height="516" role="img" aria-labelledby="t d">
+<title id="t">Time to build the same Fusion 360 part, with and without the fusion-fast-modeling skill</title>
+<desc id="d">Mean 474 seconds without the skill, 124 seconds with skill v2 (3.8 times faster), over three tasks.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .bg { fill: #fcfcfb; } .ink { fill: #0b0b0b; } .ink2 { fill: #52514e; } .muted { fill: #898781; }
+  .grid { stroke: #e1e0d9; } .axis { stroke: #c3c2b7; }
+  .s0 { fill: #898781; } .s1 { fill: #86b6ef; } .s2 { fill: #2a78d6; }
+  .halo { stroke: #fcfcfb; stroke-width: 4px; stroke-linejoin: round; paint-order: stroke; }
+  @media (prefers-color-scheme: dark) {
+    .bg { fill: #1a1a19; } .ink { fill: #f0efec; } .ink2 { fill: #c3c2b7; } .halo { stroke: #1a1a19; }
+    .grid { stroke: #2c2c2a; } .axis { stroke: #383835; } .s1 { fill: #256abf; } .s2 { fill: #5598e7; }
+  }
+</style>
+<rect class="bg" width="760" height="516" rx="10"/>
+<text class="ink" x="24" y="38" font-size="18" font-weight="600">Time to build the same part in Fusion 360</text>
+<text class="ink2" x="24" y="60" font-size="13">Same prompts, same model, same grader. With the skill the mean drops from 474 s to 124 s (3.8× faster).</text>
+<rect class="s0" x="176" y="82" width="12" height="12" rx="3"/>
+<text class="ink2" x="194" y="92" font-size="12">No skill</text>
+<rect class="s1" x="280" y="82" width="12" height="12" rx="3"/>
+<text class="ink2" x="298" y="92" font-size="12">Skill v1</text>
+<rect class="s2" x="384" y="82" width="12" height="12" rx="3"/>
+<text class="ink2" x="402" y="92" font-size="12">Skill v2</text>
+<line class="axis" x1="176.0" x2="176.0" y1="108" y2="428"/>
+<text class="muted" x="176.0" y="446" font-size="11" text-anchor="middle">0 s</text>
+<line class="grid" x1="309.3" x2="309.3" y1="108" y2="428"/>
+<text class="muted" x="309.3" y="446" font-size="11" text-anchor="middle">200 s</text>
+<line class="grid" x1="442.7" x2="442.7" y1="108" y2="428"/>
+<text class="muted" x="442.7" y="446" font-size="11" text-anchor="middle">400 s</text>
+<line class="grid" x1="576.0" x2="576.0" y1="108" y2="428"/>
+<text class="muted" x="576.0" y="446" font-size="11" text-anchor="middle">600 s</text>
+<text class="muted" x="176" y="472" font-size="11">seconds from prompt to a finished, exported model (lower is better)</text>
+<text class="ink" x="24" y="151.0" font-size="13" font-weight="600">Mean of 3 tasks</text>
+<path class="s0" d="M176.0,118 h311.7 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-311.7 z"/>
+<text class="ink halo" x="499.7" y="131" font-size="12" font-weight="600">474 s</text>
+<path class="s1" d="M176.0,138 h184.0 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-184.0 z"/>
+<text class="ink halo" x="372.0" y="151" font-size="12" font-weight="600">282 s<tspan class="ink2" font-weight="400"> · 1.7× faster</tspan></text>
+<path class="s2" d="M176.0,158 h79.0 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-79.0 z"/>
+<text class="ink halo" x="267.0" y="171" font-size="12" font-weight="600">124 s<tspan class="ink2" font-weight="400"> · 3.8× faster</tspan></text>
+<text class="ink" x="24" y="233.0" font-size="13" font-weight="400">Cable comb</text>
+<line class="grid" x1="24" x2="736" y1="188.0" y2="188.0"/>
+<path class="s0" d="M176.0,200 h194.4 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-194.4 z"/>
+<text class="ink halo" x="382.4" y="213" font-size="12" font-weight="600">298 s</text>
+<path class="s1" d="M176.0,220 h134.9 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-134.9 z"/>
+<text class="ink halo" x="322.9" y="233" font-size="12" font-weight="600">208 s<tspan class="ink2" font-weight="400"> · 1.4× faster</tspan></text>
+<path class="s2" d="M176.0,240 h105.4 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-105.4 z"/>
+<text class="ink halo" x="293.4" y="253" font-size="12" font-weight="600">164 s<tspan class="ink2" font-weight="400"> · 1.8× faster</tspan></text>
+<text class="ink" x="24" y="315.0" font-size="13" font-weight="400">Wall hook</text>
+<path class="s0" d="M176.0,282 h269.3 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-269.3 z"/>
+<text class="ink halo" x="457.3" y="295" font-size="12" font-weight="600">410 s</text>
+<path class="s1" d="M176.0,302 h223.8 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-223.8 z"/>
+<text class="ink halo" x="411.8" y="315" font-size="12" font-weight="600">342 s<tspan class="ink2" font-weight="400"> · 1.2× faster</tspan></text>
+<path class="s2" d="M176.0,322 h54.1 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-54.1 z"/>
+<text class="ink halo" x="242.1" y="335" font-size="12" font-weight="600">87 s<tspan class="ink2" font-weight="400"> · 4.7× faster</tspan></text>
+<text class="ink" x="24" y="397.0" font-size="13" font-weight="400">Project box</text>
+<path class="s0" d="M176.0,364 h471.3 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-471.3 z"/>
+<text class="ink halo" x="659.3" y="377" font-size="12" font-weight="600">713 s</text>
+<path class="s1" d="M176.0,384 h193.4 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-193.4 z"/>
+<text class="ink halo" x="381.4" y="397" font-size="12" font-weight="600">296 s<tspan class="ink2" font-weight="400"> · 2.4× faster</tspan></text>
+<path class="s2" d="M176.0,404 h77.3 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-77.3 z"/>
+<text class="ink halo" x="265.3" y="417" font-size="12" font-weight="600">122 s<tspan class="ink2" font-weight="400"> · 5.8× faster</tspan></text>
+</svg>

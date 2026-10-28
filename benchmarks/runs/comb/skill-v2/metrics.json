@@ -1,0 +1,18 @@
+{
+  "total_tool_calls": 20,
+  "tool_calls": {
+    "Read": 7,
+    "Glob": 1,
+    "ToolSearch": 1,
+    "Grep": 1,
+    "Bash": 3,
+    "Write": 1,
+    "mcp__fusion-local__fusion_mcp_execute": 4,
+    "Edit": 2
+  },
+  "fusion_execute_calls": 4,
+  "fusion_execute_failed": 1,
+  "failed_calls_by_tool": {
+    "mcp__fusion-local__fusion_mcp_execute": 1
+  }
+}
