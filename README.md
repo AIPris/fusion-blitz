@@ -1,15 +1,16 @@
-# Fusion 360 Claude Code skill: build parametric CAD models faster through the Fusion MCP
+# Fusion Blitz: a Claude Code skill for faster Fusion 360 modelling
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Claude Code skill](https://img.shields.io/badge/Claude%20Code-skill-d97757)
 ![Autodesk Fusion 360](https://img.shields.io/badge/Autodesk-Fusion%20360-orange)
 ![MCP](https://img.shields.io/badge/MCP-fusion--local-lightgrey)
 
-**`fusion-fast-modeling`** is an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that builds,
-edits and exports parametric models in **Autodesk Fusion 360** through Fusion's built-in **MCP server** (the Model
-Context Protocol endpoint of the desktop app). It gives Claude a tested Python helper for the Fusion API, a one-file
-build loop and numeric checkpoints, so an AI-assisted CAD session lands on a correct, fully parametric part in a few
-script calls instead of a trial-and-error loop (1–4 calls per part with the skill, 5–12 without, in the benchmark).
+**Fusion Blitz** is an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code (the skill itself is
+called `fusion-fast-modeling`) that builds, edits and exports parametric models in **Autodesk Fusion 360** through
+Fusion's built-in **MCP server**, the Model Context Protocol endpoint of the desktop app. It gives Claude a tested
+Python helper for the Fusion API, a one-file build loop and numeric checkpoints, so an AI-assisted CAD session lands on
+a correct, fully parametric part in a few script calls instead of a trial-and-error loop (1–4 calls per part with the
+skill, 5–12 without, in the benchmark).
 
 In a three-task benchmark, agents with the skill built the same parts in **124 s instead of 474 s (3.8× faster)**,
 used **about 30 % fewer tokens**, and needed **7 Fusion script calls instead of 24** across the three tasks.
@@ -80,15 +81,15 @@ claude mcp add --transport http fusion-local http://127.0.0.1:27182/mcp
 **Install the skill** (personal skills live in `~/.claude/skills/`, project skills in `.claude/skills/`)
 
 ```bash
-git clone https://github.com/AIPris/fusion-360-claude-code-skill.git
+git clone https://github.com/AIPris/fusion-blitz.git
 mkdir -p ~/.claude/skills
-cp -r fusion-360-claude-code-skill/skills/fusion-fast-modeling ~/.claude/skills/
+cp -r fusion-blitz/skills/fusion-fast-modeling ~/.claude/skills/
 ```
 
 ```powershell
-git clone https://github.com/AIPris/fusion-360-claude-code-skill.git
+git clone https://github.com/AIPris/fusion-blitz.git
 New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
-Copy-Item -Recurse fusion-360-claude-code-skill\skills\fusion-fast-modeling "$HOME\.claude\skills\"
+Copy-Item -Recurse fusion-blitz\skills\fusion-fast-modeling "$HOME\.claude\skills\"
 ```
 
 **Use it.** Open Claude Code and describe the part. The skill loads on its own when a request is about modelling in
@@ -162,4 +163,5 @@ version published here (plus one helper fix made during iteration 2, see the ben
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Fusion 360 and Autodesk are trademarks of Autodesk, Inc. This project is independent and is not
+affiliated with or endorsed by Autodesk or Anthropic.
