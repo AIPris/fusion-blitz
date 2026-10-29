@@ -131,6 +131,7 @@ class Model:
         self.app = adsk.core.Application.get()
         self.design = adsk.fusion.Design.cast(doc.products.itemByProductType("DesignProductType"))
         self.root = self.design.rootComponent
+        self._last_volume = 0.0  # total volume at the previous report(), the base of its volume change
 
     # ---- basics -------------------------------------------------------------------------------------------
     def mm(self, value):
@@ -280,6 +281,16 @@ class Model:
         for u, v in points:
             sketch.circle(u, v, diameter)
         return self.extrude(sketch, depth, op="cut", toward=toward, name=name)
+
+    def ring(self, plane, centre, inner, outer, depth, op="new", toward="+", at=0, name=None, body=None):
+        """Annulus between two concentric circles of diameter `inner` and `outer` at world `centre` (u, v) on `plane`
+        (offset `at`), extruded `depth`: a tube or bushing (op "new" / "join") or an annular groove (op "cut", with
+        `at` = the face it is cut into and `toward` pointing into the material)."""
+        sketch = self.sketch(plane, at=at, name=(name or "Ring") + "_sketch")
+        sketch.circle(*centre, outer)
+        sketch.circle(*centre, inner)
+        rings = [i for i in range(sketch.s.profiles.count) if sketch.s.profiles.item(i).profileLoops.count == 2]
+        return self.extrude(sketch, depth, op=op, toward=toward, name=name, body=body, profiles=rings)
 
     def sweep(self, profile, path, op="new", name=None, body=None, index=None):
         """Sweep the closed profile of sketch `profile` along the connected curves of sketch `path` (Sketch.route draws
@@ -534,6 +545,7 @@ class Model:
         then restore the originals. Proves the model follows its parameters instead of holding frozen numbers."""
         parameters = {name: self.design.userParameters.itemByName(name) for name in changes}
         originals = {name: parameter.expression for name, parameter in parameters.items()}
+        kept = self._last_volume  # the report below shows the change the parameters made; the next one starts from here
         try:
             for name, value in changes.items():
                 parameters[name].expression = expr(value)
@@ -543,15 +555,20 @@ class Model:
             for name, text in originals.items():
                 parameters[name].expression = text
             self.design.computeAll()
+            self._last_volume = kept
 
     def report(self, stage="", expect_size=None, expect_volume=None, expect_bodies=None, tol=0.01, vol_tol=0.002,
-               strict=True):
-        """Checkpoint: print one JSON line (bodies, size, volume, cylinder radii, timeline health, unconstrained
-        sketches, a warning if the user's other documents changed) and raise if a check fails, naming `stage` so a
-        failure says where it happened.
-        expect_size = world bounding box (x, y, z) mm of all bodies, within `tol` mm; expect_volume in mm3 within
-        `vol_tol` (0.2 % by default: tight enough to see a missing hole or fillet, so compute it by hand). Volumes are
-        read at very high accuracy: body.volume alone read 0.09 % low on a complex swept, lofted and bored part."""
+               strict=True, expect_change=None, change_tol=0.25):
+        """Checkpoint: print one JSON line (bodies, size, volume, volume change since the previous report, cylinder
+        radii, timeline health, unconstrained sketches, a warning if the user's other documents changed) and raise if a
+        check fails, naming `stage` so a failure says where it happened.
+        expect_size = world bounding box (x, y, z) mm of all bodies, within `tol` mm.
+        expect_volume in mm3 within `vol_tol` (0.2 % by default: tight enough to see a missing hole or fillet) for a
+        stage whose total volume is a one-line closed form. expect_change is the mm3 this stage added (+) or removed
+        (-) since the previous report, within `change_tol` (25 % by default): for a change that is itself a one-line
+        product, such as the parameter change in what_if.
+        Volumes are read at very high accuracy: body.volume alone read 0.09 % low on a complex swept, lofted and
+        bored part."""
         import json
         bodies = []
         lo, hi = [1e18] * 3, [-1e18] * 3
@@ -574,10 +591,13 @@ class Model:
             problems.append(f"expected {expect_bodies} bodies, found {len(bodies)}")
         if expect_size is not None and any(abs(a - b) > tol for a, b in zip(size, expect_size)):
             problems.append(f"size {[round(s, 3) for s in size]} != expected {list(expect_size)}")
-        if expect_volume is not None:
-            total = sum(b["volume_mm3"] for b in bodies)
-            if abs(total - expect_volume) > vol_tol * expect_volume:
-                problems.append(f"volume {total} mm3 != expected {round(expect_volume, 2)} (off {abs(total - expect_volume):.2f})")
+        total = sum(b["volume_mm3"] for b in bodies)
+        change, self._last_volume = total - self._last_volume, total
+        if expect_volume is not None and abs(total - expect_volume) > vol_tol * expect_volume:
+            problems.append(f"volume {total} mm3 != expected {round(expect_volume, 2)} (off {abs(total - expect_volume):.2f})")
+        if expect_change is not None and abs(change - expect_change) > change_tol * max(abs(expect_change), 1.0):
+            problems.append(f"volume changed by {change:.1f} mm3 since the previous report, expected about "
+                            f"{expect_change:.1f} (+-{change_tol:.0%})")
         cylinders = {}
         for body in self.root.bRepBodies:
             for face in body.faces:
@@ -591,8 +611,8 @@ class Model:
         changed = [d for d in (before or []) if d not in now]
         warnings = [f"other documents changed or closed since this model was made: {changed}"] if changed else []
         result = {"stage": stage, "document": self.doc.name, "bodies": bodies, "size_mm": [round(s, 3) for s in size],
-                  "cylinder_radii_mm": cylinders, "features": timeline.count, "problems": problems,
-                  "warnings": warnings}
+                  "volume_change_mm3": round(change, 2), "cylinder_radii_mm": cylinders, "features": timeline.count,
+                  "problems": problems, "warnings": warnings}
         print(json.dumps(result))
         if strict and problems:
             raise RuntimeError(f"[{stage or 'report'}] " + "; ".join(problems))
@@ -777,6 +797,27 @@ class Sketch:
         self.m.name_param(dimension.parameter, f"{self.tag}_dia")
         self._anchor(circle.centerSketchPoint, self._coords(u_e, v_e))
         return circle
+
+    def polygon(self, points):
+        """Closed polygon of straight edges through world (u, v) points (numbers or expressions): a gusset, trapezoid,
+        L, or the cross-section of a turned part for m.revolve. Every vertex is pinned to the origin by its two
+        coordinates, so the sketch is fully dimensioned whatever the angles. Returns the lines in order: edge i runs
+        from vertex i to vertex i + 1, the last one closes the loop."""
+        if len(points) < 3:
+            raise RuntimeError("A polygon needs at least three points")
+        exprs = [(expr(u), expr(v)) for u, v in points]
+        # See NUDGE. Dimensioning a vertex also shifts the vertices connected to it, so with one common offset the next
+        # vertex would already sit exactly on its target and trip the same trap: vertex i is drawn (i + 1) offsets
+        # off, which leaves it one offset off when its turn comes.
+        drawn = [self.point(self.m.mm(u) + (i + 1) * NUDGE, self.m.mm(v) + (i + 1) * NUDGE) for i, (u, v) in enumerate(exprs)]
+        lines = self.s.sketchCurves.sketchLines
+        edges = [lines.addByTwoPoints(drawn[0], drawn[1])]
+        for point in drawn[2:]:
+            edges.append(lines.addByTwoPoints(edges[-1].endSketchPoint, point))
+        edges.append(lines.addByTwoPoints(edges[-1].endSketchPoint, edges[0].startSketchPoint))
+        for line, (u_e, v_e) in zip(edges, exprs):
+            self._anchor(line.startSketchPoint, self._coords(u_e, v_e))
+        return edges
 
     def _direction(self, spec):
         """A world direction such as "+x" or "-z" -> (du, dv) in this sketch's two world axes."""

@@ -5,8 +5,9 @@ description: Build, change and export parametric models in Autodesk Fusion 360 q
 
 # Fusion fast modelling
 
-Almost all the time in Fusion modelling goes to round trips and failed API calls, not to Fusion (a whole
-part builds in seconds). Three habits remove most of it:
+Almost all the time in Fusion modelling goes to round trips, failed API calls and your own deliberation, not to
+Fusion: a 27-feature part rebuilds in about 8 seconds, the time 1,000 tokens of thinking take. When you are unsure
+whether a construction works, run it. Three habits remove most of the waste:
 
 1. **One build file, rebuilt from scratch.** Write the whole model as a `build()` in a `.py` file, run it with a
    five-line stub, and when something fails fix it with a small `Edit` and run again. Nothing is re-sent in full and
@@ -14,9 +15,9 @@ part builds in seconds). Three habits remove most of it:
 2. **Use the `fusion_fast` helper** (`scripts/fusion_fast.py`, next to this file). It works in millimetres, in
    world coordinates and by position, so you never think about cm, sketch axes or edge indexes. The cheat sheet
    below is enough to use it; read the helper's source only if a call surprises you.
-3. **Check with numbers, not screenshots.** Work out the expected bounding box and volume by hand and pass them to
-   `m.report(...)` after each stage. A wrong model (a join that touched nothing, a cut that missed, a forgotten
-   fillet) then fails in the same call, naming the stage. Look at one rendering at the end.
+3. **Check with numbers, not screenshots, sized to the stage.** `m.report(...)` after each stage fails in the same
+   call, naming the stage, when a join touched nothing, a cut missed or a fillet is gone; "Right-sized checking"
+   says what to pass it. Look at one rendering at the end.
 
 ## The loop
 
@@ -49,11 +50,19 @@ def run(_context: str):
 If the project has its own output convention (an `AGENTS.md`, an `outputs/` folder), follow it: job folder
 `outputs/<job>/` holding `build_<job>.py`, STEP, STL, F3D, PNGs and a short summary.
 
-**Right-sized checking.** The default `report` already proves: features healthy, sketches fully constrained, body
-count, bounding box, volume to 0.2 % (compute it by hand per stage), the set of cylinder radii (holes, posts, round
-fillets show up here), and warns if the user's other documents changed. Add `m.probe` only where a volume
-cannot tell two layouts apart (which side a slot is on, a blind hole's depth), and `m.what_if` once to prove the
-model follows its parameters. More than that costs minutes without catching anything new.
+**Right-sized checking.** Every `report` already proves: features healthy, sketches fully constrained, body count,
+the set of cylinder radii (holes, posts, round fillets show up here); it prints the measured volume and its change
+since the previous report, and warns if the user's other documents changed. Add by stage:
+
+| The stage's total volume is | Pass to `report` |
+|---|---|
+| a one-line closed form: box, cylinder, cone, plate minus round holes | `expect_size`, `expect_volume` (0.2 %) |
+| anything else: sweeps, lofts, overlapping solids, fillets, chamfers, patterns | `expect_size` when the stage moves the bounding box, and `expect_bodies=1`; then `m.probe` with a point just inside and one just outside the edge of each feature, coordinates read straight off the request |
+
+The second row carries no expected volume: Fusion measures it, `report` prints it, and the probes already say that
+each feature has the right size and place. Add `m.what_if` once to prove the model follows its parameters
+(`expect_change=` takes the one-line volume the change adds); more than that costs minutes without catching
+anything new.
 
 ## Helper cheat sheet (all lengths in mm; a number is mm, a string is a Fusion expression)
 
@@ -66,6 +75,8 @@ model follows its parameters. More than that costs minutes without catching anyt
 | `sk.rect(u, v, w, h, center=False)`, `sk.circle(u, v, dia)` | fully dimensioned; `(u, v)` are world coordinates of the two axes in the plane, in x,y,z order: xy -> (x, y), xz -> (x, z), yz -> (y, z) |
 | `m.extrude(sk, dist, op="new"\|"join"\|"cut"\|"intersect", toward="+"\|"-"\|"sym", body=, name=)` | `dist="all"` goes through everything; `toward` is the world direction along the plane's normal axis |
 | `m.holes(plane, [(u, v), ...], dia, depth="all", toward="-", at=0, name=)` | circles plus one cut. `at` is the surface you drill from, `toward` points into the material |
+| `m.ring(plane, (u, v), inner, outer, depth, op="new", toward="+", at=0, name=)` | annulus between two concentric circles, extruded: a tube or bushing (`new` / `join`) or an annular groove (`cut`, `at` = the face, `toward` into the material) |
+| `sk.polygon([(u, v), ...])` | closed polygon of straight edges through world points (numbers or expressions), every vertex pinned to the origin by its two coordinates: gusset, trapezoid, L, or a turned part's profile for `m.revolve`. Returns the lines, edge `i` from vertex `i` to `i + 1` |
 | `path = m.sketch("xz")`, `path.route((u, v), [("+x", "run_a"), ("+z", "run_b")], radius="bend")` | fully dimensioned path of straight legs joined by tangent arcs (a pipe or cable run): world start `(u, v)`, then each leg a world direction in the plane and a length; consecutive legs turn 90 degrees. Returns the curves |
 | `m.sweep(profile_sk, path_sk, op=, name=, body=)` | the profile along the path's curves; the profile sketch lies on the plane perpendicular to the path start. One closed profile per sketch (`index=` picks one) |
 | `m.loft([sk1, sk2], op=, name=, body=)` | loft through each sketch's closed profile; two circles on parallel planes (centres may differ) make a straight-sided cone or taper |
@@ -76,9 +87,9 @@ model follows its parameters. More than that costs minutes without catching anyt
 | `m.face(normal="+z", at=None)` | planar face by outward normal (outermost one if `at` is None) |
 | `m.fillet(name, (r, edges), ...)`, `m.chamfer(name, d, edges)` | one feature; several (radius, edges) pairs blend together |
 | `m.settle(param)` | regenerate through a parameter round trip (see quirks) |
-| `m.report(stage, expect_size=(x, y, z), expect_volume=, expect_bodies=, vol_tol=0.002)` | checkpoint, raises on any problem and names the stage |
+| `m.report(stage, expect_size=(x, y, z), expect_volume=, expect_bodies=, vol_tol=0.002)` | checkpoint, raises on any problem and names the stage; prints the volume and `volume_change_mm3` since the previous report |
 | `m.probe(inside=[(x, y, z)], outside=[...], label=)` | point-in-solid test in world mm |
-| `m.what_if({"width": 50, "cols": "4"}, stage, expect_size=, expect_volume=)` | change parameters, regenerate, check, restore |
+| `m.what_if({"width": 50, "cols": "4"}, stage, expect_size=, expect_change=)` | change parameters, regenerate, check (same arguments as `report`), restore |
 | `m.export(dir, stem, kinds=("f3d","step","stl"))`, `m.views(dir, stem, names=("iso",))`, `m.close()` | files verified to exist; Z-up views (`iso`, `iso_back` = from +y, `iso_left`, `top`, `front`, ...); close only models `ff.new` made |
 
 Names you give things (bodies, features, sketches) are how you find them again. Fusion's defaults are localised
@@ -139,6 +150,9 @@ the user's documents, and never use the MCP `document close` action (it closes w
   end points with its centre and dimensioning the radius.
 - A negative distance dimension makes Fusion flip the geometry to the other side of its anchor: dimension lengths,
   not signed coordinates.
+- Dimensioning a sketch point also moves the points connected to it, so the over-constraint trap above reaches
+  connected lines too: two polygon vertices at the same height fail unless each starts a different distance off.
+  `sk.polygon` draws vertex `i` at `(i + 1) * 0.013` mm off its target.
 - `m.report` reads volumes at very high accuracy: `body.volume` alone read 0.09 % low on a complex swept, lofted and
   bored part (simple bodies agree to 7 digits).
 - A native thread or shell is not wrapped: see "Dropping to the raw API" (and add the wrapper here if you needed it
