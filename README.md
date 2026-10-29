@@ -9,24 +9,38 @@
 called `fusion-fast-modeling`) that builds, edits and exports parametric models in **Autodesk Fusion 360** through
 Fusion's built-in **MCP server**, the Model Context Protocol endpoint of the desktop app. It gives Claude a tested
 Python helper for the Fusion API, a one-file build loop and numeric checkpoints, so an AI-assisted CAD session lands on
-a correct, fully parametric part in a few script calls instead of a trial-and-error loop (1–4 calls per part with the
-skill, 5–12 without, in the benchmark).
+a correct, fully parametric part in one or two script calls instead of a trial-and-error loop.
 
-In a three-task benchmark, agents with the skill built the same parts in **124 s instead of 474 s (3.8× faster)**,
-used **about 30 % fewer tokens**, and needed **7 Fusion script calls instead of 24** across the three tasks.
+In the current benchmark (skill v2.3, no advisor tool), agents with the skill built three small parts in **73 s instead
+of 398 s (5.4× faster)**, used **35 % fewer tokens** and needed **5 Fusion script calls instead of 30**. On a much harder
+part, a flanged piping spool with 27 Fusion features, the skill took **482 s instead of 1,123 s (2.3× faster)**.
 
-![Bar chart of the mean time to build three Fusion 360 parts: 474 s without the skill, 282 s with skill v1, 124 s with skill v2](benchmarks/time-per-task.svg)
+![Bar chart of the time to build four Fusion 360 parts, with and without the skill: comb 362 s against 59 s, hook 400 s against 82 s, box 432 s against 78 s, spool 1,123 s against 482 s](benchmarks/time-per-task.svg)
 
-| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls, 3 tasks (failed) | Checks passed, 3 tasks |
+| Setup | Mean time, 3 small parts | vs no skill | Mean tokens | Fusion script calls, 3 parts (failed) | Checks passed, 3 parts |
 |---|---:|---:|---:|---:|---:|
-| No skill | 474 s | – | 126,836 | 24 (5) | 36/39 |
-| Skill v1 | 282 s | 1.7× faster | 104,409 | 7 (1) | 39/39 |
-| **Skill v2 (this repo)** | **124 s** | **3.8× faster** | **89,394** | **7 (1)** | **39/39** |
+| No skill | 398 s | – | 120,384 | 30 (13) | 36/39 |
+| **Skill v2.3 (this repo)** | **73 s** | **5.4× faster** | **78,023** | **5 (1)** | **39/39** |
 
-Three tasks (cable comb, wall hook, project box), one run per task and setup, same prompts, same model (Claude
-Sonnet 5.5), graded by script. **Read the caveats before you quote these numbers:** v2 was tuned on the same three tasks
-after v1 was measured, so the untuned v1 (1.7×) is the cleaner comparison, and the tasks stay inside what the helper
-wraps. Method, per-task results and every limitation are in [benchmarks/README.md](benchmarks/README.md).
+| Task | No skill | Skill v2.3 |
+|---|---:|---:|
+| Cable comb | 362 s, 7 calls (3 failed) | 59 s, 2 calls (1 failed) |
+| Wall hook | 400 s, 12 calls (4 failed) | 82 s, 2 calls (0 failed) |
+| Project box | 432 s, 11 calls (6 failed) | 78 s, 1 call (0 failed) |
+| Piping spool, 2 runs each | 1,123 s (887–1,359), 29 calls (5 failed) | 482 s (448–516), 6 calls (1 failed) |
+
+Same prompts, same model (Claude Sonnet 5.5), graded by script, and every agent was told not to use the advisor tool.
+**Read the caveats before you quote these numbers:**
+
+- **Small samples.** One run per part and setup, two for the spool. The no-skill spool runs alone differ by 470 s
+  (887 s and 1,359 s), so the direction is clear but the size of the gap is not.
+- **The skill was developed against these tasks.** v2 was tuned on the three small parts and v2.1 to v2.3 on the
+  spool, so the numbers are in-sample. Expect less on a part the skill has never seen.
+- **Quality is not the difference.** Every skill run passed all checks. The no-skill project box scored 10 of 13 only
+  because the agent added inside fillets the request did not ask for (valid geometry, but off specification).
+- **The first benchmark allowed the advisor tool** and measured an older version (v2: 3.8× faster, in-sample). Those
+  numbers are kept, with the reasons they are not comparable, in [benchmarks/README.md](benchmarks/README.md), which also
+  has the method, every run and every limitation.
 
 ## What you get
 
@@ -36,8 +50,12 @@ wraps. Method, per-task results and every limitation are in [benchmarks/README.m
 - **`fusion_fast`, a tested helper for the Fusion Python API** (`adsk.core` / `adsk.fusion`). It works in millimetres,
   in world coordinates and picks geometry by position, so Claude never has to think about centimetres, sketch axes or
   edge indexes.
-- **Numeric checkpoints instead of screenshots.** After each stage `m.report(...)` checks bounding box, volume (0.2 %),
-  body count, cylinder radii, feature health and sketch constraints, and fails in the same call, naming the stage.
+- **Numeric checkpoints instead of screenshots.** After each stage `m.report(...)` checks bounding box, volume,
+  body count, cylinder radii, feature health and sketch constraints, and fails in the same call, naming the stage. For
+  every cut it also prints how much of the cut tool sat in material, so a misplaced hole shows up without hand-computed
+  coordinates.
+- **Seams found, not calculated.** `m.edges_between(a, b)` returns the edges where two joined features meet, ready for
+  a fillet.
 - **Parametric by default.** The request becomes named user parameters and expressions, so the model stays editable in
   Fusion; `m.what_if(...)` proves the geometry follows them.
 - **Safe next to your real work.** It only touches documents it created itself, never saves or closes yours, and warns
@@ -59,6 +77,7 @@ traps the helper removes (details in [SKILL.md](skills/fusion-fast-modeling/SKIL
 | a second body appears | a `join` whose profile touches nothing | `expect_bodies=1` fails the checkpoint |
 | the "iso" view shows the part on its side | the view cube assumes Y-up | explicit Z-up cameras for the preview images |
 | lost edge references after patterns and fillets | history not regenerated | `m.settle(...)` |
+| a sweep path whose arcs come back with swapped ends | Fusion keeps sketch arcs counter-clockwise | `Sketch.route(...)` draws and dimensions a straight-and-arc path |
 | the STEP file looks ten times too small | Fusion declares `SI_UNIT(.CENTI.,.METRE.)` in its STEP output | nothing to fix; check an export by re-importing it |
 | `Körper2`, `Ebene1`, `Unbenannt` | default names are localised | everything is addressed by names you give it |
 
@@ -104,16 +123,22 @@ leaves the finished document open and unsaved.
 
 ## Example results
 
-The three benchmark parts, as built by Claude with the skill. Each part has a build script you can read in
-[`examples/`](examples).
+The three small benchmark parts, as built by Claude with the skill. Each part has a build script you can read in
+[`examples/`](examples) (written during the v2 benchmark runs; they still run unchanged and pass their checkpoints with
+v2.3).
 
 <table>
 <tr>
-<td align="center"><img src="examples/comb_iso.png" width="260" alt="Desk cable comb modelled in Fusion 360: 90 x 28 x 12 mm bar with five slots, two mounting holes and R3 corners"><br><b>Cable comb</b><br>164 s with the skill, 298 s without<br><a href="examples/build_comb.py">build_comb.py</a></td>
-<td align="center"><img src="examples/hook_iso.png" width="260" alt="Wall hook modelled in Fusion 360: 50 x 70 mm plate, two holes, a 12 mm round arm with R2 fillets"><br><b>Wall hook</b><br>87 s with the skill, 410 s without<br><a href="examples/build_hook.py">build_hook.py</a></td>
-<td align="center"><img src="examples/box_iso.png" width="260" alt="Open-top project box modelled in Fusion 360: four screw posts with pilot holes, six front vent slots, R5 corners"><br><b>Project box</b><br>122 s with the skill, 713 s without<br><a href="examples/build_box.py">build_box.py</a></td>
+<td align="center"><img src="examples/comb_iso.png" width="260" alt="Desk cable comb modelled in Fusion 360: 90 x 28 x 12 mm bar with five slots, two mounting holes and R3 corners"><br><b>Cable comb</b><br><a href="examples/build_comb.py">build_comb.py</a></td>
+<td align="center"><img src="examples/hook_iso.png" width="260" alt="Wall hook modelled in Fusion 360: 50 x 70 mm plate, two holes, a 12 mm round arm with R2 fillets"><br><b>Wall hook</b><br><a href="examples/build_hook.py">build_hook.py</a></td>
+<td align="center"><img src="examples/box_iso.png" width="260" alt="Open-top project box modelled in Fusion 360: four screw posts with pilot holes, six front vent slots, R5 corners"><br><b>Project box</b><br><a href="examples/build_box.py">build_box.py</a></td>
 </tr>
 </table>
+
+The hard part, the flanged piping spool (the benchmark's reference build, see
+[benchmarks/README.md](benchmarks/README.md#task-4-flanged-eccentric-elbow-spool)):
+
+<img src="benchmarks/spool-reference.png" width="420" alt="Flanged eccentric reducing elbow spool in Fusion 360: two flanges with bolt holes, a 90 degree bend, an eccentric reducer, a 45 degree sensor boss, four gusset ribs and two lifting lugs">
 
 ## How a build looks
 
@@ -135,21 +160,21 @@ m.fillet("Corner_Fillet", ("corner_r", m.edges(parallel="z", x=[0, 90], y=[0, 28
 ```
 
 [`SKILL.md`](skills/fusion-fast-modeling/SKILL.md) has the full helper cheat sheet: sketches on world planes and faces,
-extrude and cut, hole sets, rectangular and circular patterns, mirrors, sweeps along dimensioned routes, lofts,
-revolves, construction axes, edge and face selection by position, fillets and chamfers, `report`, `probe`, `what_if`,
-export and views.
+extrude and cut, hole sets, rings and polygons, rectangular and circular patterns, mirrors, sweeps along dimensioned
+routes, lofts, revolves, construction axes, edge and face selection by position (and by the seam between two
+features), fillets and chamfers, `report`, `probe`, `what_if`, export and views.
 
 ## Limitations
 
 - Tested on Windows 11 with Fusion 2705.1.25 and Claude Code only. The helper uses just the Fusion API, but other
   platforms are untested.
 - It drives the **local desktop MCP server** (`fusion_mcp_execute` scripts), not Autodesk's cloud MCP servers.
-- Wrapped: sketches, extrude, cut, holes, rectangular and circular patterns, mirror, sweep (with a dimensioned
-  straight-and-arc route), loft, revolve, construction axes, fillets, chamfers, probes, export, views. Not wrapped:
-  native threads and shell. For those, `SKILL.md` tells Claude to use the raw API inside the same build file and to
-  finish with a checkpoint.
-- The benchmark covers three simple parts. See [benchmarks/README.md](benchmarks/README.md) for what it does and does
-  not show.
+- Wrapped: sketches, extrude, cut, holes, rings, polygons, rectangular and circular patterns, mirror, sweep (with a
+  dimensioned straight-and-arc route), loft, revolve, construction axes, fillets, chamfers, edge selection by position
+  and between features, probes, export, views. Not wrapped: native threads, shell and angled work planes. For those,
+  `SKILL.md` tells Claude to use the raw API inside the same build file and to finish with a checkpoint.
+- The benchmark covers four parts and a handful of runs. See [benchmarks/README.md](benchmarks/README.md) for what it
+  does and does not show.
 - Geometry checks do not prove strength, fit or printability. Review parts before you manufacture them.
 
 ## Repository layout
@@ -160,8 +185,11 @@ examples/                       build scripts and preview images produced with t
 benchmarks/                     method, per-run results, chart, report script and the grading harness
 ```
 
-Skill versions are tagged: `v1.0.0` is the first draft measured in benchmark iteration 1, `v2.0.0` is the iteration-2
-version published here (plus one helper fix made during iteration 2, see the benchmark caveats).
+Skill versions are tagged. `v1.0.0` is the first draft, measured in benchmark iteration 1. `v2.0.0` is the iteration-2
+version. `v2.1.0` adds the helpers a spool-like part needs (sweep, loft, revolve, circular pattern, construction axes, a
+dimensioned route) and reads volumes at very high accuracy. `v2.2.0` replaces hand-computed volumes by probes and adds
+rings and polygons. `v2.3.0` (current) adds `edges_between` and the per-cut material share and trims the probing
+advice. The development log, with every spool run on the way, is in [benchmarks/README.md](benchmarks/README.md).
 
 ## License
 

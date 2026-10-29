@@ -1,0 +1,75 @@
+{
+  "expectations": [
+    {
+      "text": "Document ZZ_bench_hook_base exists and was left open",
+      "passed": true,
+      "evidence": "found"
+    },
+    {
+      "text": "Exactly one solid body",
+      "passed": true,
+      "evidence": "1 bodies, solid flags [True]"
+    },
+    {
+      "text": "Bounding box size matches the request (+/-0.05 mm)",
+      "passed": true,
+      "evidence": "size [50.0, 40.0, 70.0] vs [50, 40, 70]"
+    },
+    {
+      "text": "Part sits where requested: bounding-box minimum corner (+/-0.05 mm)",
+      "passed": true,
+      "evidence": "min [0.0, 0.0, 0.0] vs [0, 0, 0]"
+    },
+    {
+      "text": "Volume matches the reference model within 0.2 % (all features present, right size and place)",
+      "passed": true,
+      "evidence": "21198.20 mm3 vs reference 21198.20 (0.000 % off)"
+    },
+    {
+      "text": "Cylindrical faces (holes, posts, fillets) match the reference by radius",
+      "passed": true,
+      "evidence": "{'6.0': 1, '4.0': 4, '2.5': 2} vs reference {'6.0': 1, '4.0': 4, '2.5': 2}"
+    },
+    {
+      "text": "Every timeline feature is healthy",
+      "passed": true,
+      "evidence": "9 features, unhealthy: []"
+    },
+    {
+      "text": "Every sketch is fully constrained",
+      "passed": true,
+      "evidence": "3 sketches, loose: []"
+    },
+    {
+      "text": "At least 6 named user parameters",
+      "passed": true,
+      "evidence": "15: ['plate_w', 'plate_h', 'plate_t', 'corner_r', 'hole_d', 'hole_x', 'hole_z1', 'hole_z2', 'arm_d', 'arm_l', 'arm_x', 'arm_z', 'arm_end_r', 'joint_r', 'arm_total']"
+    },
+    {
+      "text": "Most sketch dimensions are driven by named parameters (>= 50 %)",
+      "passed": true,
+      "evidence": "11 of 11 dimensions reference a user parameter"
+    },
+    {
+      "text": "STEP, STL, F3D and iso PNG were delivered, non-empty",
+      "passed": true,
+      "evidence": "missing: []"
+    },
+    {
+      "text": "The user's other documents are untouched (same names, saved and modified flags)",
+      "passed": true,
+      "evidence": "unchanged"
+    },
+    {
+      "text": "Delivered STEP re-imports as one valid solid with the reference size, position and volume",
+      "passed": true,
+      "evidence": "STEP re-imported: 1 solid(s), valid=True, size [50.0, 40.0, 70.0], min [0.0, 0.0, 0.0], volume 21198.20 vs 21198.20 (0.000 % off)"
+    }
+  ],
+  "summary": {
+    "passed": 13,
+    "failed": 0,
+    "total": 13,
+    "pass_rate": 1.0
+  }
+}

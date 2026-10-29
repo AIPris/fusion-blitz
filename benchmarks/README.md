@@ -1,35 +1,112 @@
 # Benchmarks: Fusion 360 modelling with and without the skill
 
-The same three modelling tasks were given to a fresh Claude agent in three setups: no skill, skill v1 and skill v2
-(the version in this repository). Every build ran through the Fusion MCP on a real Fusion 360 desktop session and was
-graded afterwards by script, not by the agent's own report.
+The same modelling tasks were given to a fresh Claude agent with and without the skill. Every build ran through the
+Fusion MCP on a real Fusion 360 desktop session and was graded afterwards by script, not by the agent's own report.
+This page has the current results (skill v2.3, no advisor tool), the development log that led to them, the first
+benchmark (v1 and v2, advisor tool allowed) and every caveat.
 
-![Bar chart of the time to build each part: no skill, skill v1 and skill v2](time-per-task.svg)
+![Bar chart of the time to build four Fusion 360 parts, with and without the skill](time-per-task.svg)
 
-## Results
+## Results: skill v2.3 against no skill, no advisor tool
 
-Mean over the three tasks:
+| Setup | Mean time, 3 small parts | vs no skill | Mean tokens | Fusion script calls (failed) | Checks passed |
+|---|---:|---:|---:|---:|---:|
+| No skill | 398 s | – | 120,384 | 30 (13) | 36/39 |
+| Skill v2.3 | 73 s | 5.4× faster | 78,023 | 5 (1) | 39/39 |
 
-| Setup | Mean time | vs no skill | Mean tokens | Fusion script calls, 3 tasks (failed) | Checks passed, 3 tasks |
+| Task | No skill | Skill v2.3 |
+|---|---:|---:|
+| Cable comb | 362 s, 7 calls (3 failed), 114k tokens | 59 s, 2 calls (1 failed), 76k tokens |
+| Wall hook | 400 s, 12 calls (4 failed), 121k tokens | 82 s, 2 calls (0 failed), 80k tokens |
+| Project box | 432 s, 11 calls (6 failed), 126k tokens | 78 s, 1 call (0 failed), 79k tokens |
+| Piping spool | 1,123 s (887-1359), 29 calls in 2 runs (5 failed), 229k tokens | 482 s (448-516), 6 calls in 2 runs (1 failed), 162k tokens |
+
+Cells are wall-clock time of the agent run (for the spool the mean of two runs with the range in brackets), the number
+of `fusion_mcp_execute` script calls, and total tokens. Raw numbers per run are in [`runs/`](runs), aggregated in
+[`results.json`](results.json). The agents were told not to call the advisor tool, and the transcript analysis shows no
+advisor call in any of the ten runs.
+
+What the numbers show, and what they do not:
+
+- **Speed.** 5.4× on the three small parts (comb 6.1×, hook 4.9×, box 5.5×) and 2.3× on the spool. Against the faster of
+  the two no-skill spool runs (887 s) the skill's mean is 1.8× faster.
+- **Where the time goes.** On the spool both setups spend nearly all of the time with the model thinking (Fusion itself
+  ran for 5 to 7 s per run). The skill runs made their first Fusion call after 426 s and 356 s, the no-skill runs after
+  529 s and 645 s, and then needed 2 and 4 script calls against 13 and 16. Failed calls: none or one with the skill, 3
+  and 2 without; one of the no-skill runs hit the `setByPlane` trap described below.
+- **Quality.** Every skill run passed every check (39/39 on the small parts, 16/16 on both spool runs). So did both
+  no-skill spool runs. The no-skill project box scored 10 of 13 because the agent added R2.5 fillets on the inside
+  corners that the request did not ask for: valid geometry, but it fails the volume, radius and STEP checks. The same
+  happened in the first benchmark.
+- **Sample size.** One run per small part and setup, two for the spool. The two no-skill spool runs differ by 470 s, so
+  the size of the spool's gap is uncertain even though its direction is not.
+
+## Development log: the spool, with the advisor tool allowed
+
+The spool (task 4) was the development task for skill versions 2.1 to 2.3. These runs allowed the agents an advisor
+tool, a stronger reviewer model that a run may consult; one call took 30 to 300 s of pure waiting. That wait has
+nothing to do with the skill and varies from run to run, so the tables give the wall time and the wall time without
+the advisor waits (taken from the transcript timestamps). The final comparison above removes the advisor altogether.
+
+Spool, one or two runs per row, all 16/16:
+
+| Setup | Wall time | Without advisor waits | Tokens |
+|---|---:|---:|---:|
+| No skill | 921 s | 747 s | 172,222 |
+| Skill v2 (iteration 3) | 1,407 s | 1,144 s | 253,904 |
+| Skill v2.1 (iteration 4) | 965 s | 659 s | 178,791 |
+| Skill v2.1 (iteration 5, control) | 786 s | 576 s | 175k |
+| Skill v2.2 (iteration 5), runs 1 and 2 | 689 s and 728 s | 494 s and 595 s | 167k and 172k |
+| Skill v2.3 (iteration 7), runs 1 and 2 | 756 s and 741 s | 434 s and 464 s | 155k and 164k |
+
+What changed in each version, and why:
+
+- **v2 against no skill was slower on this part** (1,407 s against 921 s). The skill told the agent to compute the
+  expected volume of every stage by hand. The agent's build file held 13 such checks and about 55 lines of volume
+  arithmetic, which probably explains the longer thinking (the thinking itself is not visible in the transcripts).
+- **v2.1** wrapped what the spool needs and the first three tasks did not (sweep, loft, revolve, circular pattern,
+  construction axes, a dimensioned path sketch) and read volumes at very high accuracy. Fusion calls on the spool fell
+  from 7 to 2.
+- **v2.2** dropped the expected volumes for stages without a one-line closed form (probes instead) and added rings and
+  polygons.
+- **v2.3** added `m.edges_between` (the seam edges where two joined features meet, which the agents had worked out by
+  hand), made `report` print how much of each cut tool sat in material, and told the agent to probe only at coordinates
+  the request states. The two runs that were fastest net of the advisor came with it, but the wall time did not improve
+  because both runs spent 277 to 322 s waiting for the advisor. That is what led to the no-advisor comparison.
+
+The three small tasks with the advisor tool allowed, one run each, wall time and wall time without the advisor waits
+(comb / hook / box): v2.1 172 s, 276 s, 119 s and 122 s, 139 s, 119 s; v2.2 153 s, 164 s, 337 s and 73 s, 92 s, 144 s;
+v2.3 196 s, 139 s, 238 s and 83 s, 87 s, 121 s. The box with v2.2 took 337 s of which 193 s were two advisor calls.
+None of these runs lost a check.
+
+## The first benchmark: v1 and v2, advisor tool allowed
+
+The first measurement (iterations 1 and 2) compared no skill, skill v1 and skill v2 on the three small tasks, with an
+advisor tool available. It is kept because the rest of this page grew out of it, not because its absolute numbers are
+comparable with the ones above:
+
+| Setup | Mean time, 3 small parts | vs no skill | Mean tokens | Fusion script calls (failed) | Checks passed |
 |---|---:|---:|---:|---:|---:|
 | No skill | 474 s | – | 126,836 | 24 (5) | 36/39 |
 | Skill v1 | 282 s | 1.7× faster | 104,409 | 7 (1) | 39/39 |
 | Skill v2 | 124 s | 3.8× faster | 89,394 | 7 (1) | 39/39 |
 
-Per task (wall-clock time of the agent run, number of `fusion_mcp_execute` script calls):
-
 | Task | No skill | Skill v1 | Skill v2 |
 |---|---:|---:|---:|
-| Cable comb | 298 s, 5 calls (0 failed) | 208 s, 3 calls (1 failed) | 164 s, 4 calls (1 failed) |
-| Wall hook | 410 s, 7 calls (1 failed) | 342 s, 2 calls (0 failed) | 87 s, 1 call (0 failed) |
-| Project box | 713 s, 12 calls (4 failed) | 296 s, 2 calls (0 failed) | 122 s, 2 calls (0 failed) |
+| Cable comb | 298 s, 5 calls (0 failed), 111k tokens | 208 s, 3 calls (1 failed), 98k tokens | 164 s, 4 calls (1 failed), 87k tokens |
+| Wall hook | 410 s, 7 calls (1 failed), 116k tokens | 342 s, 2 calls (0 failed), 108k tokens | 87 s, 1 call (0 failed), 85k tokens |
+| Project box | 713 s, 12 calls (4 failed), 154k tokens | 296 s, 2 calls (0 failed), 107k tokens | 122 s, 2 calls (0 failed), 96k tokens |
 
-Speed-up over no skill: v1 1.4× / 1.2× / 2.4× and v2 1.8× / 4.7× / 5.8× on comb / hook / box. Every task was faster with
-the skill in both versions. Raw numbers per run are in [`runs/`](runs), aggregated in [`results.json`](results.json).
+Speed-up over no skill: v1 1.4× / 1.2× / 2.4× and v2 1.8× / 4.7× / 5.8× on comb / hook / box. v2 was written after v1
+was measured, using what those runs showed, and measured on the same three tasks, so its numbers are in-sample and the
+untuned v1 (1.7×) is the cleaner comparison. Two of the 9 runs had no advisor call at all (v2 hook and box), which
+flatters v2's 124 s: without the advisor waits the means are 341 s (no skill), 171 s (v1) and 104 s (v2).
 
 ## What was tested
 
-Three parts, each described in plain language with exact dimensions. The prompts are in
+Four parts, each described in plain language with exact dimensions; the fourth, the spool, is described under
+[Task 4](#task-4-flanged-eccentric-elbow-spool).
+The first three: The prompts are in
 [`harness/driver.py`](harness/driver.py); the task text is repeated here.
 
 <details>
@@ -65,18 +142,28 @@ the set centred along x. Round the four vertical outside corner edges of the box
 ## How the runs were made
 
 - **Agent:** Claude Sonnet 5.5 (`claude-sonnet-5-5`) at `xhigh` effort, started as a fresh Claude Code subagent per
-  run. Both setups had the same tools (the Fusion MCP, file access and an optional advisor tool). The skill setups were
-  told to read `SKILL.md` first; the no-skill setup was not.
+  run. Both setups had the same tools (the Fusion MCP and file access). The skill setups were told to read `SKILL.md`
+  first; the no-skill setup was not.
+- **No advisor tool in the current results.** The prompt ends the ground rules with "Do not call the advisor tool"
+  (`driver.py --no-advisor`). The tool was still present, so this is an instruction and not a removal; the transcripts
+  of all ten runs show no call. The first benchmark and the development log did not have this line.
 - **Same instructions:** the prompt asks for millimetres, Z up, every key dimension a named user parameter, fully
   constrained sketches, healthy features, one solid body, and STEP, STL, F3D and a preview PNG. The agent cannot ask
   questions and has to leave one new document open and unsaved.
-- **One run per task and setup, one after another.** Fusion has a single active document, so runs cannot overlap.
-- **Environment:** Windows 11, Fusion 2705.1.25 with its built-in MCP server, other (unsaved) documents open in the
-  same Fusion session.
+- **One agent at a time.** Fusion has a single active document, so runs cannot overlap. In the current results the
+  setups alternate (no skill, skill, no skill, skill for the spool; no skill then skill for each small part), and each
+  skill run reads a frozen copy of the skill, with the installed copy moved away, so nothing can change mid-run.
+- **Environment:** Windows 11, Fusion 2705.1.25 with its built-in MCP server, restarted before the current results so
+  that only an empty document was open. After every run the harness fingerprints all open documents (name, flags,
+  feature, body, sketch and parameter counts) and compares them with the state before, closes the benchmark document,
+  and clears what Fusion's long-lived Python keeps between calls (module search path, imported modules, globals), so
+  an earlier agent's files cannot be imported by a later one. Each transcript is audited for reads outside the allowed
+  folders and for use of the Skill tool.
 - **Time and tokens** are what Claude Code reported for the agent run (`timing.json`): total wall-clock seconds
   including reading the skill, and total tokens. **Fusion calls** are counted from the agent's transcript with
   [`harness/transcript_stats.py`](harness/transcript_stats.py); a call counts as failed when the tool result is
-  flagged as an error or the MCP result says `"success": false`.
+  flagged as an error or the MCP result says `"success": false`. Advisor waits in the development log are the gaps
+  between the advisor request and its answer in the transcript.
 
 ## How the runs were graded
 
@@ -101,7 +188,7 @@ The reference volumes and radii of tasks 1 to 3 come from [`harness/golden.py`](
 once with the helper; task 4 has an independent reference, see below. The per-run results, including the evidence string
 for every check, are in `runs/<task>/<setup>/grading.json`.
 
-## Task 4: flanged eccentric elbow spool (defined and verified, not yet run)
+## Task 4: flanged eccentric elbow spool
 
 The first three tasks stay inside what the helper wraps. This one does not. It is a 90 degree piping spool with an inlet
 and an outlet flange, an eccentric reducer, a sensor boss at 45 degrees on the bend, four gusset ribs and two lifting
@@ -196,37 +283,49 @@ Design notes for anyone extending this:
   (cutting them separately in one boolean loses about 100 mm³), and the finished solid is flagged invalid at the hole and
   bore intersection until `fix()` has run; the volume is identical before and after.
 
-Not run with agents yet. What to look for: whether the skill's lead survives when the helper covers only part of the
-work, how many Fusion calls the unwrapped features cost with and without it, and whether the tilted work plane trips both
-setups. Those are questions, not results.
+**What the runs showed.** The questions this task was added for, answered with two runs per setup (no advisor tool):
+
+- *Does the skill's lead survive when the helper covers only part of the work?* It shrank, from 5.4× on the small parts
+  to 2.3×, and it took several skill versions to get there: v2 was slower than no skill (see the development log). With
+  v2.3 the helper wraps nearly everything the spool needs (sweep, loft, revolve, circular pattern, axes, a path sketch,
+  seam edges): one skill build used no raw API call at all, the other seven lines for a tangent-arc outline.
+- *How many Fusion calls?* 2 and 4 script calls with the skill, 13 and 16 without. The no-skill runs spent their calls on
+  failed builds (3 and 2), API lookups and verification passes, and on 476 hand-written probe points in one run.
+- *Does the tilted work plane trip both setups?* In the no-skill runs, one agent hit it and one avoided it: run 1 called
+  `setByPlane` and got "Environment is not supported", run 2 built the plane with `setByAngle` straight away. The skill
+  runs never needed an angled plane (the boss is a revolve in the XZ plane, since its axis lies in y = 0).
 
 ## Caveats
 
 Please read these before you quote the numbers.
 
-- **Small sample.** Three tasks, one run per task and setup, no repeats. There is no variance between repeated runs
-  here; the spread you can see is between tasks (the speed-up ranges from 1.2× to 5.8×). The mean of three tasks is not
-  a confidence interval.
-- **v2 is tuned on these tasks.** After v1 was measured, the skill was rewritten using what those runs showed (right-sized
-  checks, `probe`, `what_if`, better views, and so on) and measured on the same three tasks. v2's numbers are therefore
-  in-sample. **v1 against no skill (1.7×) is the cleaner comparison.** Expect less than 3.8× on tasks the skill was not
-  tuned on.
-- **The tasks sit inside what the helper wraps:** extrude, cut, holes, patterns, fillets. Revolve, shell, loft, sweep and
-  threads are not wrapped and were not tested.
-- **The 92 % pass rate of the no-skill setup is one run.** In the project box, the no-skill agent added R2.5 fillets on
-  the inside corners that the request did not ask for. The geometry is valid, but it fails three checks (volume,
-  cylinder radii, STEP volume), so 36 of 39 checks passed. On the other two parts the no-skill agent matched the
-  reference volumes exactly.
-- **The grading references were built with the helper.** They are plain geometry (volume, bounding box, radii), and the
-  no-skill agents matched them exactly on the comb and the hook, which argues against a bias toward the skill. It is
-  still a point to keep in mind.
-- **One failed call in v2 is a helper bug that has since been fixed.** The v2 comb run crashed on `ff.new(replace=True)`
-  because of a stale registry entry for a document that had been closed outside the helper. The fix landed before the
-  hook and box runs and is part of the published v2; the comb build script still contains its workaround. The one
-  failed v1 call (also comb) has a different cause: a Fusion API `RuntimeError` ("Didn't roll editing feature back")
-  while the agent inspected a fillet.
+- **Small sample.** One run per small part and setup, two per setup for the spool, none repeated beyond that. The
+  spread you can see is between tasks (the speed-up ranges from 2.3× to 6.1×) and between the two no-skill spool runs
+  (887 s and 1,359 s). The mean of a few runs is not a confidence interval.
+- **The skill was developed against these tasks.** v2 was rewritten after v1 was measured on the three small parts, and
+  v2.1 to v2.3 were developed on the spool and its transcripts. The numbers are therefore in-sample. Expect less on
+  parts the skill has never seen.
+- **The advisor line is an instruction, not a removal.** The tool was present in every run; the prompt told the agents
+  not to use it and the transcripts show none did. An earlier measurement with the tool available is in the
+  development log, where it moves a single run's wall time by up to 322 s.
+- **The tasks cover little.** Extrude, cut, holes, patterns, fillets, chamfers, and for the spool sweep, loft and
+  revolve. Shell, threads and angled work planes are not wrapped and were not tested.
+- **The no-skill pass rate (36/39 on the small parts) is one run.** In the project box the no-skill agent added R2.5
+  fillets on the inside corners that the request did not ask for, in the first benchmark and again now. The geometry is
+  valid, but it fails three checks (volume, cylinder radii, STEP volume). On the comb and the hook the no-skill agents
+  matched the reference exactly.
+- **The grading references were built with the helper** (tasks 1 to 3; the spool also has an independent build123d
+  reference). They are plain geometry (volume, bounding box, radii, probe points), and the no-skill agents matched them
+  exactly in most runs, which argues against a bias toward the skill. It is still a point to keep in mind.
+- **Agents can have side effects.** One no-skill spool agent switched Fusion's default modelling orientation to Z-up for
+  a moment and restored it. The harness checks the open documents, not the preferences.
+- **One run was lost and redone.** The no-skill box run of the current comparison was cut off by the account's
+  usage limit; it was discarded, the Fusion document it had left was closed, and the run was repeated from scratch.
 - **The original runs also allowed reading a local folder of example Fusion scripts**, identical for both setups. The
   published driver leaves that sentence out, so a re-run starts from a slightly less helpful baseline.
+- **v2's first benchmark contained one helper bug that has since been fixed.** The v2 comb run crashed on
+  `ff.new(replace=True)` because of a stale registry entry for a document that had been closed outside the helper. The
+  fix landed before the hook and box runs; the comb build script still contains its workaround.
 - **Time is wall-clock time.** It includes model latency and Fusion's own time, and it moves with load on the machine.
 
 ## Reproduce it
@@ -236,16 +335,19 @@ You need Fusion running with its MCP server enabled, Claude Code with the `fusio
 
 1. Inside Fusion (for example through `fusion_mcp_execute`, with `benchmarks/harness` on `sys.path`) call
    `grade.snapshot(r"<dir>/docs_before.json")` to record the documents that are open now.
-2. `python benchmarks/harness/driver.py 1 <bench_dir> <dir>/docs_before.json` writes a prompt and a grading spec for
-   every task (now four, including the spool) and setup into `<bench_dir>/iteration-1/`.
-3. Run each `prompt.txt` in a fresh Claude Code subagent, one at a time.
+2. `python benchmarks/harness/driver.py 1 <bench_dir> <dir>/docs_before.json --no-advisor` writes a prompt and a grading
+   spec for every task (four, including the spool) and setup into `<bench_dir>/iteration-1/`. Leave `--no-advisor` out to
+   allow the advisor tool as in the first benchmark.
+3. Run each `prompt.txt` in a fresh Claude Code subagent, one at a time, and alternate the setups. Keep the skill that
+   the no-skill setup must not see out of `~/.claude/skills/` while it runs.
 4. After each run, grade the document inside Fusion with `grade.grade(r"<run_dir>/spec.json")`, then
    `uv run --python 3.12 --with build123d-mcp==0.3.91 python benchmarks/harness/step_check.py <run_dir>`, then
    `python benchmarks/harness/transcript_stats.py <agent_transcript.jsonl> <run_dir>/metrics.json`. Close the benchmark
-   document with `grade.close_named("ZZ_bench_...")`; never use the MCP document-close action.
-5. Copy `timing.json`, `metrics.json` and `grading.json` of each run into `benchmarks/runs/<task>/<setup>/` and run
-   `python benchmarks/report.py` to rebuild `results.json`, the chart and the tables. `report.py` aggregates the tasks
-   listed in its `TASKS`; add `spool` there once it has runs.
+   document with `grade.close_named("ZZ_bench_...")`; never use the MCP document-close action. Also compare the open
+   documents with their state before the run.
+5. Copy `timing.json`, `metrics.json` and `grading.json` of each run into `benchmarks/runs/<task>/<setup>/run-<n>/` and
+   run `python benchmarks/report.py` to rebuild `results.json`, the chart and the tables. `report.py` reads the setups
+   listed in its `EXPERIMENTS`.
 
 To regenerate the task 4 reference and re-check its probe points:
 `uv run --python 3.12 --with build123d-mcp==0.3.91 python benchmarks/harness/reference_spool.py --probes`.
@@ -268,7 +370,7 @@ def run(_context: str):
 
 | Path | Content |
 |---|---|
-| `runs/<task>/<setup>/` | `timing.json`, `metrics.json` and `grading.json` of every run, copied unchanged from the benchmark workspace |
+| `runs/<task>/<setup>/[run-<n>/]` | `timing.json`, `metrics.json` and `grading.json` of every run in the two comparisons above, copied unchanged from the benchmark workspace (`*-noadvisor` setups: the current results; `no-skill`, `skill-v1`, `skill-v2`: the first benchmark) |
 | `results.json`, `time-per-task.svg` | aggregated results and the chart, both generated by `report.py` |
 | `report.py` | aggregation, chart and the tables above; standard library only |
 | `harness/` | `driver.py` (tasks, prompts, grading specs), `grade.py` and `golden.py` (run inside Fusion), `step_check.py`, `transcript_stats.py` |
@@ -276,4 +378,5 @@ def run(_context: str):
 | `spool-reference.png` | the task 4 part as built in Fusion |
 
 The generated CAD files, the raw agent prompts and the transcripts are not included. They embed local file paths and
-the names of unrelated open documents. The three preview images in [`../examples/`](../examples) come from the v2 runs.
+the names of unrelated open documents. The development-log runs are summarised in the tables above but their raw files
+are not included. The three preview images in [`../examples/`](../examples) come from the v2 runs.

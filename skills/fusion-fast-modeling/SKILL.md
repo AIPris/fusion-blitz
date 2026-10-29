@@ -57,12 +57,15 @@ since the previous report, and warns if the user's other documents changed. Add 
 | The stage's total volume is | Pass to `report` |
 |---|---|
 | a one-line closed form: box, cylinder, cone, plate minus round holes | `expect_size`, `expect_volume` (0.2 %) |
-| anything else: sweeps, lofts, overlapping solids, fillets, chamfers, patterns | `expect_size` when the stage moves the bounding box, and `expect_bodies=1`; then `m.probe` with a point just inside and one just outside the edge of each feature, coordinates read straight off the request |
+| anything else: sweeps, lofts, overlapping solids, fillets, chamfers, patterns | `expect_size` when the stage moves the bounding box, and `expect_bodies=1`; then `m.probe` only where the request states the coordinate itself (no trigonometry, at most one point inside and one outside per feature) |
 
-The second row carries no expected volume: Fusion measures it, `report` prints it, and the probes already say that
-each feature has the right size and place. Add `m.what_if` once to prove the model follows its parameters
-(`expect_change=` takes the one-line volume the change adds); more than that costs minutes without catching
-anything new.
+The second row carries no expected volume: Fusion measures it and `report` prints it. Add `m.what_if` once to prove
+the model follows its parameters (`expect_change=` takes the one-line volume the change adds); more than that costs
+minutes without catching anything new.
+
+**Cuts check themselves.** For every extrude cut with a distance (`m.holes`, `m.ring`, `m.extrude(op="cut")`)
+`report` lists `removed_pct_of_tool`: 100 means the cut sat wholly in material, less means part of it crossed air
+(right only where the request says it opens into a cavity). Read it instead of probing or computing a cut.
 
 ## Helper cheat sheet (all lengths in mm; a number is mm, a string is a Fusion expression)
 
@@ -84,10 +87,11 @@ anything new.
 | `m.axis("z", at=(x, y))` | construction axis parallel to a world axis through a point: `("y", at=(x, z))`, `("x", at=(y, z))`; `m.axis("z")` is the origin axis |
 | `m.pattern(feat, "x", count, spacing, axis2=, count2=, spacing2=)`, `m.circular_pattern(feat, axis, count)`, `m.mirror(feat, "yz")` | rectangular pattern, `count` copies over 360 degrees about `"x"` / `"y"` / `"z"` or `m.axis(...)`, and mirror (counts/spacings may be parameters) |
 | `m.edges(parallel=, curve=, radius=, convex=, min_len=, x=, y=, z=)` | edges by position: `x=4`, `z=(0, 5)` (None = open end) or a list of those meaning any-of, e.g. `x=[0, 90], y=[0, 28]` = the four corner edges of a bar; `parallel="y"`, `curve="circle"`, `radius=6`, `convex=60` (outside corners). Ranges test the edge midpoint, so `x=[(a - 1, a), (b, b + 1)], y=(-3, 3), z=(10, 40)` picks the edges inside that box on two separate x bands, e.g. where a tab meets both sides of a round bar |
+| `m.edges_between(feat_a, feat_b)` | the edges where faces made by one feature meet faces made by another (a feature or a list of them, as `m.extrude`, `m.sweep` ... return them): the seam of a tab or boss joined to a pipe, ready for `m.fillet`. Call it right after the join; no intersection coordinates to work out |
 | `m.face(normal="+z", at=None)` | planar face by outward normal (outermost one if `at` is None) |
 | `m.fillet(name, (r, edges), ...)`, `m.chamfer(name, d, edges)` | one feature; several (radius, edges) pairs blend together |
 | `m.settle(param)` | regenerate through a parameter round trip (see quirks) |
-| `m.report(stage, expect_size=(x, y, z), expect_volume=, expect_bodies=, vol_tol=0.002)` | checkpoint, raises on any problem and names the stage; prints the volume and `volume_change_mm3` since the previous report |
+| `m.report(stage, expect_size=(x, y, z), expect_volume=, expect_bodies=, vol_tol=0.002)` | checkpoint, raises on any problem and names the stage; prints the volume, `volume_change_mm3` since the previous report and the `cuts` shares |
 | `m.probe(inside=[(x, y, z)], outside=[...], label=)` | point-in-solid test in world mm |
 | `m.what_if({"width": 50, "cols": "4"}, stage, expect_size=, expect_change=)` | change parameters, regenerate, check (same arguments as `report`), restore |
 | `m.export(dir, stem, kinds=("f3d","step","stl"))`, `m.views(dir, stem, names=("iso",))`, `m.close()` | files verified to exist; Z-up views (`iso`, `iso_back` = from +y, `iso_left`, `top`, `front`, ...); close only models `ff.new` made |

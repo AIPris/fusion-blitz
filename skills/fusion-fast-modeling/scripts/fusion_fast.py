@@ -132,6 +132,7 @@ class Model:
         self.design = adsk.fusion.Design.cast(doc.products.itemByProductType("DesignProductType"))
         self.root = self.design.rootComponent
         self._last_volume = 0.0  # total volume at the previous report(), the base of its volume change
+        self._cuts = []  # (feature, tool mm3, removed mm3) of the extrude cuts since the previous report()
 
     # ---- basics -------------------------------------------------------------------------------------------
     def mm(self, value):
@@ -264,15 +265,24 @@ class Model:
 
     def extrude(self, sketch, distance, op="new", toward="+", name=None, body=None, profiles="all"):
         """Extrude every profile of `sketch` (or the listed profile indexes) by `distance` mm / expression, or
-        distance="all" to run through everything. op: new | join | cut | intersect. toward: "+" | "-" | "sym"."""
+        distance="all" to run through everything. op: new | join | cut | intersect. toward: "+" | "-" | "sym".
+        A cut with a distance is measured: the next report() lists `cuts`, the share of the tool's volume (profile area
+        x distance) that it removed. 100 % means the tool sat wholly in material."""
         chosen = adsk.core.ObjectCollection.create()
+        area = 0.0  # cm2 of the chosen profiles
         for i in (range(sketch.s.profiles.count) if profiles == "all" else profiles):
             chosen.add(sketch.s.profiles.item(i))
+            area += sketch.s.profiles.item(i).areaProperties().area
         if chosen.count == 0:
             raise RuntimeError("The sketch has no closed profile to extrude")
         feature_input = self.root.features.extrudeFeatures.createInput(chosen, OPERATIONS[op])
         self.set_extent(feature_input, distance, toward, sketch)
-        return self._finish(self.root.features.extrudeFeatures.add(feature_input), name, body, op, [sketch])
+        measured = op == "cut" and distance != "all"
+        before = self._volume() if measured else 0.0
+        feature = self._finish(self.root.features.extrudeFeatures.add(feature_input), name, body, op, [sketch])
+        if measured:
+            self._cuts.append((feature.name, area / CM ** 2 * self.mm(distance), before - self._volume()))
+        return feature
 
     def holes(self, plane, points, diameter, depth="all", toward="-", at=0, name="Holes"):
         """Round through (or blind) holes at world 2D `points` [(u, v), ...] drilled from the sketch plane toward
@@ -447,6 +457,27 @@ class Model:
             found.add(edge)
         return found
 
+    def edges_between(self, a, b, body=None):
+        """Edges where a face made by feature `a` meets a face made by feature `b` (each a feature or a list of them,
+        as m.extrude / m.sweep / ... return them), as an ObjectCollection: the seam where a tab joins a pipe, a boss
+        a wall. Searches every body unless `body` is given. Call it right after the join, before later features
+        split or merge those faces."""
+        def tokens(features):
+            return {face.entityToken for feature in (features if isinstance(features, (list, tuple)) else [features])
+                    for face in feature.faces}
+        side_a, side_b = tokens(a), tokens(b)
+        found = adsk.core.ObjectCollection.create()
+        for solid in ([self._resolve_body(body)] if body else self.root.bRepBodies):
+            for edge in solid.edges:
+                if edge.faces.count == 2:
+                    first, second = edge.faces.item(0).entityToken, edge.faces.item(1).entityToken
+                    if (first in side_a and second in side_b) or (first in side_b and second in side_a):
+                        found.add(edge)
+        if found.count == 0:
+            raise RuntimeError(f"No edge between the faces of the two features (they own {len(side_a)} and {len(side_b)} "
+                               "faces): is there a join between them, and has a later feature already reshaped them?")
+        return found
+
     def face(self, body=None, normal="+z", at=None):
         """The planar face whose outward normal is `normal` ("+z", "-x", ...), at coordinate `at` mm along that
         axis, or the outermost one when `at` is None."""
@@ -511,6 +542,10 @@ class Model:
                    for s in (1, -1))
 
     # ---- checks and output --------------------------------------------------------------------------------
+    def _volume(self):
+        """Total volume of every body in mm3, at very high accuracy."""
+        return sum(body.getPhysicalProperties(ACCURACY).volume for body in self.root.bRepBodies) / CM ** 3
+
     def settle(self, parameter, rounds=2):
         """Regenerate the history through parameter round trips. A fresh build whose last step is a fillet or
         chamfer after patterns can report lost edge references until it has been regenerated from a changed state."""
@@ -567,6 +602,9 @@ class Model:
         stage whose total volume is a one-line closed form. expect_change is the mm3 this stage added (+) or removed
         (-) since the previous report, within `change_tol` (25 % by default): for a change that is itself a one-line
         product, such as the parameter change in what_if.
+        `cuts` lists, per extrude cut with a distance since the previous report, the percentage of the tool volume
+        (profile area x distance) that it removed: 100 means the cut sat wholly in material; less means part of it
+        crossed air (right where the request says it opens into a cavity, a missed or misplaced cut otherwise).
         Volumes are read at very high accuracy: body.volume alone read 0.09 % low on a complex swept, lofted and
         bored part."""
         import json
@@ -613,6 +651,10 @@ class Model:
         result = {"stage": stage, "document": self.doc.name, "bodies": bodies, "size_mm": [round(s, 3) for s in size],
                   "volume_change_mm3": round(change, 2), "cylinder_radii_mm": cylinders, "features": timeline.count,
                   "problems": problems, "warnings": warnings}
+        if self._cuts:
+            result["cuts"] = [{"feature": f, "removed_pct_of_tool": round(100 * removed / tool, 2) if tool else None}
+                              for f, tool, removed in self._cuts]
+            self._cuts = []
         print(json.dumps(result))
         if strict and problems:
             raise RuntimeError(f"[{stage or 'report'}] " + "; ".join(problems))

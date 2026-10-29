@@ -1,0 +1,75 @@
+{
+  "expectations": [
+    {
+      "text": "Document ZZ_bench_box_base exists and was left open",
+      "passed": true,
+      "evidence": "found"
+    },
+    {
+      "text": "Exactly one solid body",
+      "passed": true,
+      "evidence": "1 bodies, solid flags [True]"
+    },
+    {
+      "text": "Bounding box size matches the request (+/-0.05 mm)",
+      "passed": true,
+      "evidence": "size [70.0, 50.0, 30.0] vs [70, 50, 30]"
+    },
+    {
+      "text": "Part sits where requested: bounding-box minimum corner (+/-0.05 mm)",
+      "passed": true,
+      "evidence": "min [0.0, 0.0, 0.0] vs [0, 0, 0]"
+    },
+    {
+      "text": "Volume matches the reference model within 0.2 % (all features present, right size and place)",
+      "passed": false,
+      "evidence": "28477.75 mm3 vs reference 28330.21 (0.521 % off)"
+    },
+    {
+      "text": "Cylindrical faces (holes, posts, fillets) match the reference by radius",
+      "passed": false,
+      "evidence": "{'1.4': 4, '4.0': 4, '5.0': 4, '2.5': 4} vs reference {'5.0': 4, '1.4': 4, '4.0': 4}"
+    },
+    {
+      "text": "Every timeline feature is healthy",
+      "passed": true,
+      "evidence": "14 features, unhealthy: []"
+    },
+    {
+      "text": "Every sketch is fully constrained",
+      "passed": true,
+      "evidence": "5 sketches, loose: []"
+    },
+    {
+      "text": "At least 8 named user parameters",
+      "passed": true,
+      "evidence": "17: ['box_x', 'box_y', 'box_z', 'wall', 'floor_t', 'corner_r', 'post_d', 'post_inset', 'post_top_z', 'pilot_d', 'pilot_depth', 'slot_n', 'slot_w', 'slot_h', 'slot_z0', 'slot_pitch', 'slot_x0']"
+    },
+    {
+      "text": "Most sketch dimensions are driven by named parameters (>= 50 %)",
+      "passed": true,
+      "evidence": "34 of 34 dimensions reference a user parameter"
+    },
+    {
+      "text": "STEP, STL, F3D and iso PNG were delivered, non-empty",
+      "passed": true,
+      "evidence": "missing: []"
+    },
+    {
+      "text": "The user's other documents are untouched (same names, saved and modified flags)",
+      "passed": true,
+      "evidence": "unchanged"
+    },
+    {
+      "text": "Delivered STEP re-imports as one valid solid with the reference size, position and volume",
+      "passed": false,
+      "evidence": "STEP re-imported: 1 solid(s), valid=True, size [70.0, 50.0, 30.0], min [-0.0, -0.0, 0.0], volume 28477.75 vs 28330.21 (0.521 % off)"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 3,
+    "total": 13,
+    "pass_rate": 0.769
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "expectations": [
+    {
+      "text": "Document ZZ_bench_spool_base exists and was left open",
+      "passed": true,
+      "evidence": "found"
+    },
+    {
+      "text": "Exactly one solid body",
+      "passed": true,
+      "evidence": "1 bodies, solid flags [True]"
+    },
+    {
+      "text": "Bounding box size matches the request (+/-0.05 mm)",
+      "passed": true,
+      "evidence": "size [405.0, 200.0, 498.0] vs [405, 200, 498]"
+    },
+    {
+      "text": "Part sits where requested: bounding-box minimum corner (+/-0.05 mm)",
+      "passed": true,
+      "evidence": "min [0.0, -100.0, -100.0] vs [0, -100, -100]"
+    },
+    {
+      "text": "Volume matches the reference model within 0.1 % (all features present, right size and place)",
+      "passed": true,
+      "evidence": "1719674.68 mm3 vs reference 1719679.34 (0.000 % off)"
+    },
+    {
+      "text": "Volume matches the reference model within 0.005 % (all features present, right size and place)",
+      "passed": true,
+      "evidence": "1719674.68 mm3 vs reference 1719679.34 (0.000 % off)"
+    },
+    {
+      "text": "The set of cylindrical-face radii matches the reference",
+      "passed": true,
+      "evidence": "[4.0, 6.0, 9.0, 12.5, 15.0, 25.0, 25.15, 30.15, 33.0, 39.0, 39.45, 44.45, 52.0, 57.0, 82.5, 100.0] vs reference [4.0, 6.0, 9.0, 12.5, 15.0, 25.0, 25.15, 30.15, 33.0, 39.0, 39.45, 44.45, 52.0, 57.0, 82.5, 100.0]"
+    },
+    {
+      "text": "Centre of mass within 0.1 mm of the reference (features in the right places)",
+      "passed": true,
+      "evidence": "[179.488, 3.562, 129.911] vs reference [179.489, 3.562, 129.911] (0.001 mm apart)"
+    },
+    {
+      "text": "All 142 probe points are solid or empty as expected (features in the right places)",
+      "passed": true,
+      "evidence": "all as expected"
+    },
+    {
+      "text": "Every timeline feature is healthy",
+      "passed": true,
+      "evidence": "65 features, unhealthy: []"
+    },
+    {
+      "text": "Every sketch is fully constrained",
+      "passed": true,
+      "evidence": "23 sketches, loose: []"
+    },
+    {
+      "text": "At least 25 named user parameters",
+      "passed": true,
+      "evidence": "56: ['od_main', 'id_main', 'od_red', 'id_red', 'len_in', 'bend_r', 'bend_ang', 'len_riser', 'len_red', 'len_out', 'red_offset', 'x_out', 'z_red0', 'z_red1', 'z_out', 'fl1_od', 'fl1_t', 'fl1_hole_d', 'fl1_bc', 'fl1_holes', 'fl1_a0', 'fl1_groove_id', 'fl1_groove_od', 'fl1_groove_depth', 'hub_d0', 'hub_len', 'fl_chamfer', 'fl2_od', 'fl2_t', 'fl2_hole_d', 'fl2_bc', 'fl2_holes', 'fl2_a0', 'fl2_groove_id', 'fl2_groove_od', 'fl2_groove_depth', 'rib_t', 'rib_r0', 'rib_out', 'rib_down', 'ribs', 'boss_ang', 'boss_d', 'boss_len', 'boss_hole_d', 'boss_hole_floor', 'boss_chamfer', 'lug_t', 'lug_x0', 'lug_x1', 'lug_z0', 'lug_z1', 'lug_r', 'lug_cz', 'lug_hole_d', 'lug_fillet']"
+    },
+    {
+      "text": "Most sketch dimensions are driven by named parameters (>= 50 %)",
+      "passed": true,
+      "evidence": "53 of 53 dimensions reference a user parameter"
+    },
+    {
+      "text": "STEP, STL, F3D and iso PNG were delivered, non-empty",
+      "passed": true,
+      "evidence": "missing: []"
+    },
+    {
+      "text": "The user's other documents are untouched (same names, saved and modified flags)",
+      "passed": true,
+      "evidence": "unchanged"
+    },
+    {
+      "text": "Delivered STEP re-imports as one valid solid with the reference size, position and volume",
+      "passed": true,
+      "evidence": "STEP re-imported: 1 solid(s), valid=True, size [405.0, 200.0, 498.0], min [0.0, -100.0, -100.0], volume 1720714.03 vs 1719679.34 (0.060 % off)"
+    }
+  ],
+  "summary": {
+    "passed": 16,
+    "failed": 0,
+    "total": 16,
+    "pass_rate": 1.0
+  }
+}

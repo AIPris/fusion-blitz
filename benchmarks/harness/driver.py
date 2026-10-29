@@ -1,6 +1,9 @@
 """Creates a benchmark workspace: evals.json, eval_metadata.json, run folders, agent prompts and grading specs.
 
-usage: python driver.py <iteration> <bench_dir> <docs_before.json>
+usage: python driver.py <iteration> <bench_dir> <docs_before.json> [--no-advisor]
+
+--no-advisor adds "Do not call the advisor tool." to every prompt. The agents may have an advisor tool, which adds 30 to
+300 s of waiting that has nothing to do with the skill; the results in ../README.md were measured this way.
 
 <docs_before.json> is a snapshot of the documents open in Fusion before the benchmark, written by
 grade.snapshot(path) (run it inside Fusion). The grader uses it to prove the user's other documents stayed untouched.
@@ -103,11 +106,15 @@ SKILL_LINE = (f"First read and follow the skill at {SKILL / 'SKILL.md'} "
               "(its helper module is in the scripts folder next to it).\n\n")
 
 
+NO_ADVISOR = False   # set by --no-advisor
+
+
 def prompt(ev, config, out):
     suffix = "skill" if config == "with_skill" else "base"
+    access = ("Do not browse anywhere else on disk." if config == "without_skill"
+              else "Do not browse anywhere else on disk except the skill folder.")
     text = COMMON.format(doc=f"ZZ_bench_{ev['name']}_{suffix}", out=out, stem=ev["stem"], task=ev["task"],
-                         extra_access=("Do not browse anywhere else on disk." if config == "without_skill"
-                                       else "Do not browse anywhere else on disk except the skill folder."))
+                         extra_access=access + (" Do not call the advisor tool." if NO_ADVISOR else ""))
     return (SKILL_LINE if config == "with_skill" else "") + text
 
 
@@ -134,4 +141,6 @@ def main(iteration, bench, docs_before):
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]), Path(sys.argv[2]), json.loads(Path(sys.argv[3]).read_text(encoding="utf-8")))
+    NO_ADVISOR = "--no-advisor" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--no-advisor"]
+    main(int(args[0]), Path(args[1]), json.loads(Path(args[2]).read_text(encoding="utf-8")))

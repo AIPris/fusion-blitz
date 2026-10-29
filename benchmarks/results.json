@@ -1,8 +1,11 @@
 {
-  "tasks": {
+  "advisor": {
     "comb": {
       "no-skill": {
+        "runs": 1,
         "seconds": 297.6,
+        "seconds_min": 297.6,
+        "seconds_max": 297.6,
         "tokens": 110784,
         "fusion_calls": 5,
         "fusion_calls_failed": 0,
@@ -12,7 +15,10 @@
         "token_saving": 0.0
       },
       "skill-v1": {
+        "runs": 1,
         "seconds": 208.3,
+        "seconds_min": 208.3,
+        "seconds_max": 208.3,
         "tokens": 98265,
         "fusion_calls": 3,
         "fusion_calls_failed": 1,
@@ -22,7 +28,10 @@
         "token_saving": 0.11300368284228768
       },
       "skill-v2": {
+        "runs": 1,
         "seconds": 164.1,
+        "seconds_min": 164.1,
+        "seconds_max": 164.1,
         "tokens": 86604,
         "fusion_calls": 4,
         "fusion_calls_failed": 1,
@@ -34,7 +43,10 @@
     },
     "hook": {
       "no-skill": {
+        "runs": 1,
         "seconds": 410.0,
+        "seconds_min": 410.0,
+        "seconds_max": 410.0,
         "tokens": 115872,
         "fusion_calls": 7,
         "fusion_calls_failed": 1,
@@ -44,7 +56,10 @@
         "token_saving": 0.0
       },
       "skill-v1": {
+        "runs": 1,
         "seconds": 341.7,
+        "seconds_min": 341.7,
+        "seconds_max": 341.7,
         "tokens": 108360,
         "fusion_calls": 2,
         "fusion_calls_failed": 0,
@@ -54,7 +69,10 @@
         "token_saving": 0.06483015741507869
       },
       "skill-v2": {
+        "runs": 1,
         "seconds": 87.2,
+        "seconds_min": 87.2,
+        "seconds_max": 87.2,
         "tokens": 85436,
         "fusion_calls": 1,
         "fusion_calls_failed": 0,
@@ -66,7 +84,10 @@
     },
     "box": {
       "no-skill": {
+        "runs": 1,
         "seconds": 713.0,
+        "seconds_min": 713.0,
+        "seconds_max": 713.0,
         "tokens": 153853,
         "fusion_calls": 12,
         "fusion_calls_failed": 4,
@@ -76,7 +97,10 @@
         "token_saving": 0.0
       },
       "skill-v1": {
+        "runs": 1,
         "seconds": 296.1,
+        "seconds_min": 296.1,
+        "seconds_max": 296.1,
         "tokens": 106602,
         "fusion_calls": 2,
         "fusion_calls_failed": 0,
@@ -86,7 +110,10 @@
         "token_saving": 0.30711783325642006
       },
       "skill-v2": {
+        "runs": 1,
         "seconds": 122.0,
+        "seconds_min": 122.0,
+        "seconds_max": 122.0,
         "tokens": 96143,
         "fusion_calls": 2,
         "fusion_calls_failed": 0,
@@ -95,38 +122,179 @@
         "speedup": 5.844262295081967,
         "token_saving": 0.37509830812528844
       }
+    },
+    "mean": {
+      "no-skill": {
+        "runs": 3,
+        "seconds": 473.53333333333336,
+        "tokens": 126836.33333333333,
+        "fusion_calls": 24,
+        "fusion_calls_failed": 5,
+        "checks_passed": 36,
+        "checks_total": 39,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v1": {
+        "runs": 3,
+        "seconds": 282.03333333333336,
+        "tokens": 104409,
+        "fusion_calls": 7,
+        "fusion_calls_failed": 1,
+        "checks_passed": 39,
+        "checks_total": 39,
+        "speedup": 1.6789977544025527,
+        "token_saving": 0.17682104759677164
+      },
+      "skill-v2": {
+        "runs": 3,
+        "seconds": 124.43333333333334,
+        "tokens": 89394.33333333333,
+        "fusion_calls": 7,
+        "fusion_calls_failed": 1,
+        "checks_passed": 39,
+        "checks_total": 39,
+        "speedup": 3.8055183498526657,
+        "token_saving": 0.29519932511451763
+      }
     }
   },
-  "mean": {
-    "no-skill": {
-      "seconds": 473.53333333333336,
-      "tokens": 126836.33333333333,
-      "fusion_calls": 24,
-      "fusion_calls_failed": 5,
-      "checks_passed": 36,
-      "checks_total": 39,
-      "speedup": 1.0,
-      "token_saving": 0.0
+  "no-advisor": {
+    "comb": {
+      "no-skill-noadvisor": {
+        "runs": 1,
+        "seconds": 362.4,
+        "seconds_min": 362.4,
+        "seconds_max": 362.4,
+        "tokens": 114016,
+        "fusion_calls": 7,
+        "fusion_calls_failed": 3,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v2.3-noadvisor": {
+        "runs": 1,
+        "seconds": 59.2,
+        "seconds_min": 59.2,
+        "seconds_max": 59.2,
+        "tokens": 75934,
+        "fusion_calls": 2,
+        "fusion_calls_failed": 1,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 6.121621621621621,
+        "token_saving": 0.3340057535784451
+      }
     },
-    "skill-v1": {
-      "seconds": 282.03333333333336,
-      "tokens": 104409,
-      "fusion_calls": 7,
-      "fusion_calls_failed": 1,
-      "checks_passed": 39,
-      "checks_total": 39,
-      "speedup": 1.6789977544025527,
-      "token_saving": 0.17682104759677164
+    "hook": {
+      "no-skill-noadvisor": {
+        "runs": 1,
+        "seconds": 399.6,
+        "seconds_min": 399.6,
+        "seconds_max": 399.6,
+        "tokens": 120989,
+        "fusion_calls": 12,
+        "fusion_calls_failed": 4,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v2.3-noadvisor": {
+        "runs": 1,
+        "seconds": 81.9,
+        "seconds_min": 81.9,
+        "seconds_max": 81.9,
+        "tokens": 79628,
+        "fusion_calls": 2,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 4.879120879120879,
+        "token_saving": 0.34185752423774063
+      }
     },
-    "skill-v2": {
-      "seconds": 124.43333333333334,
-      "tokens": 89394.33333333333,
-      "fusion_calls": 7,
-      "fusion_calls_failed": 1,
-      "checks_passed": 39,
-      "checks_total": 39,
-      "speedup": 3.8055183498526657,
-      "token_saving": 0.29519932511451763
+    "box": {
+      "no-skill-noadvisor": {
+        "runs": 1,
+        "seconds": 432.3,
+        "seconds_min": 432.3,
+        "seconds_max": 432.3,
+        "tokens": 126147,
+        "fusion_calls": 11,
+        "fusion_calls_failed": 6,
+        "checks_passed": 10,
+        "checks_total": 13,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v2.3-noadvisor": {
+        "runs": 1,
+        "seconds": 78.3,
+        "seconds_min": 78.3,
+        "seconds_max": 78.3,
+        "tokens": 78507,
+        "fusion_calls": 1,
+        "fusion_calls_failed": 0,
+        "checks_passed": 13,
+        "checks_total": 13,
+        "speedup": 5.521072796934866,
+        "token_saving": 0.377654641014055
+      }
+    },
+    "spool": {
+      "no-skill-noadvisor": {
+        "runs": 2,
+        "seconds": 1123.05,
+        "seconds_min": 886.8,
+        "seconds_max": 1359.3,
+        "tokens": 229228.5,
+        "fusion_calls": 29,
+        "fusion_calls_failed": 5,
+        "checks_passed": 32,
+        "checks_total": 32,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v2.3-noadvisor": {
+        "runs": 2,
+        "seconds": 481.79999999999995,
+        "seconds_min": 447.7,
+        "seconds_max": 515.9,
+        "tokens": 161935,
+        "fusion_calls": 6,
+        "fusion_calls_failed": 1,
+        "checks_passed": 32,
+        "checks_total": 32,
+        "speedup": 2.330946450809465,
+        "token_saving": 0.29356515442015285
+      }
+    },
+    "mean": {
+      "no-skill-noadvisor": {
+        "runs": 3,
+        "seconds": 398.1,
+        "tokens": 120384,
+        "fusion_calls": 30,
+        "fusion_calls_failed": 13,
+        "checks_passed": 36,
+        "checks_total": 39,
+        "speedup": 1.0,
+        "token_saving": 0.0
+      },
+      "skill-v2.3-noadvisor": {
+        "runs": 3,
+        "seconds": 73.13333333333334,
+        "tokens": 78023,
+        "fusion_calls": 5,
+        "fusion_calls_failed": 1,
+        "checks_passed": 39,
+        "checks_total": 39,
+        "speedup": 5.443482224247949,
+        "token_saving": 0.3518823099415205
+      }
     }
   }
 }
