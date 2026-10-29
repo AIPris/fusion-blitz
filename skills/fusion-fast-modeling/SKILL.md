@@ -66,8 +66,13 @@ model follows its parameters. More than that costs minutes without catching anyt
 | `sk.rect(u, v, w, h, center=False)`, `sk.circle(u, v, dia)` | fully dimensioned; `(u, v)` are world coordinates of the two axes in the plane, in x,y,z order: xy -> (x, y), xz -> (x, z), yz -> (y, z) |
 | `m.extrude(sk, dist, op="new"\|"join"\|"cut"\|"intersect", toward="+"\|"-"\|"sym", body=, name=)` | `dist="all"` goes through everything; `toward` is the world direction along the plane's normal axis |
 | `m.holes(plane, [(u, v), ...], dia, depth="all", toward="-", at=0, name=)` | circles plus one cut. `at` is the surface you drill from, `toward` points into the material |
-| `m.pattern(feat, "x", count, spacing, axis2=, count2=, spacing2=)`, `m.mirror(feat, "yz")` | rectangular pattern (counts/spacings may be parameters) and mirror |
-| `m.edges(parallel=, curve=, radius=, convex=, min_len=, x=, y=, z=)` | edges by position: `x=4`, `z=(0, 5)` (None = open end) or a list of those meaning any-of, e.g. `x=[0, 90], y=[0, 28]` = the four corner edges of a bar; `parallel="y"`, `curve="circle"`, `radius=6`, `convex=60` (outside corners) |
+| `path = m.sketch("xz")`, `path.route((u, v), [("+x", "run_a"), ("+z", "run_b")], radius="bend")` | fully dimensioned path of straight legs joined by tangent arcs (a pipe or cable run): world start `(u, v)`, then each leg a world direction in the plane and a length; consecutive legs turn 90 degrees. Returns the curves |
+| `m.sweep(profile_sk, path_sk, op=, name=, body=)` | the profile along the path's curves; the profile sketch lies on the plane perpendicular to the path start. One closed profile per sketch (`index=` picks one) |
+| `m.loft([sk1, sk2], op=, name=, body=)` | loft through each sketch's closed profile; two circles on parallel planes (centres may differ) make a straight-sided cone or taper |
+| `m.revolve(sk, axis, op=, name=, body=)` | 360 degrees about a line of the same sketch (a profile edge works), `"x"` / `"y"` / `"z"`, or `m.axis(...)` |
+| `m.axis("z", at=(x, y))` | construction axis parallel to a world axis through a point: `("y", at=(x, z))`, `("x", at=(y, z))`; `m.axis("z")` is the origin axis |
+| `m.pattern(feat, "x", count, spacing, axis2=, count2=, spacing2=)`, `m.circular_pattern(feat, axis, count)`, `m.mirror(feat, "yz")` | rectangular pattern, `count` copies over 360 degrees about `"x"` / `"y"` / `"z"` or `m.axis(...)`, and mirror (counts/spacings may be parameters) |
+| `m.edges(parallel=, curve=, radius=, convex=, min_len=, x=, y=, z=)` | edges by position: `x=4`, `z=(0, 5)` (None = open end) or a list of those meaning any-of, e.g. `x=[0, 90], y=[0, 28]` = the four corner edges of a bar; `parallel="y"`, `curve="circle"`, `radius=6`, `convex=60` (outside corners). Ranges test the edge midpoint, so `x=[(a - 1, a), (b, b + 1)], y=(-3, 3), z=(10, 40)` picks the edges inside that box on two separate x bands, e.g. where a tab meets both sides of a round bar |
 | `m.face(normal="+z", at=None)` | planar face by outward normal (outermost one if `at` is None) |
 | `m.fillet(name, (r, edges), ...)`, `m.chamfer(name, d, edges)` | one feature; several (radius, edges) pairs blend together |
 | `m.settle(param)` | regenerate through a parameter round trip (see quirks) |
@@ -79,6 +84,24 @@ model follows its parameters. More than that costs minutes without catching anyt
 Names you give things (bodies, features, sketches) are how you find them again. Fusion's defaults are localised
 (a German UI says `Körper2`, `Ebene1`, `Unbenannt`), so never look anything up by a default name. Parameter names
 must not collide with Fusion expression functions: `floor`, `round`, `abs`, `min`, `max`, `sin` ... (use `floor_t`).
+
+## Dropping to the raw API
+
+For what the helper does not wrap (threads, shell, unusual features), write the raw `adsk` calls in the same build
+file. These helper members save the conversions:
+
+| Member | Is |
+|---|---|
+| `m.root`, `m.design` | the root component and the design |
+| `m.mm(x)` | millimetres of a number or an expression |
+| `sk.s` | the raw `adsk.fusion.Sketch`, e.g. `sk.s.sketchCurves.sketchLines.addByTwoPoints(a, b)` |
+| `sk.point(u, v)` | world (u, v) mm -> sketch point in cm; use it for every raw curve point |
+| `sk.axis_of["u"]`, `["v"]` | `(sketch axis 0 or 1, sign)` of the plane's two world axes |
+| `sk._along(line, "u")`, `sk._aligned(p, q, "v")` | constrain a line to run along a world axis / two points to differ only along one |
+| `sk._anchor(point, sk._coords(u_expr, v_expr))` | pins a sketch point at world (u, v) from the origin, parametrically |
+| `sk._measure(a, b, "u", expression, "role")` | named driving dimension between two sketch points along a world axis |
+
+Query `fusion_mcp_read` with `queryType="apiDocumentation"` before guessing a signature, and still finish with `m.report`.
 
 ## Safety
 
@@ -111,6 +134,12 @@ the user's documents, and never use the MCP `document close` action (it closes w
   raw coordinates.
 - Model parameters that hold bare numbers (taper 0 deg, fillet tangency weight 1, a pattern's unused second direction
   count and spacing) are inert Fusion defaults, not hard-coded dimensions.
-- A native thread, shell, revolve, loft or sweep is not wrapped. Use the raw API in the same build file
-  (`m.root`, `m.design`), query `fusion_mcp_read` with `queryType="apiDocumentation"` before guessing a signature,
-  and still finish with `m.report` (and add the wrapper here if you needed it twice).
+- Fusion keeps sketch arcs counter-clockwise, so an arc drawn clockwise comes back with its start and end swapped:
+  continue from the end that is farther from the previous point. `sk.route` constrains each bend by aligning the arc's
+  end points with its centre and dimensioning the radius.
+- A negative distance dimension makes Fusion flip the geometry to the other side of its anchor: dimension lengths,
+  not signed coordinates.
+- `m.report` reads volumes at very high accuracy: `body.volume` alone read 0.09 % low on a complex swept, lofted and
+  bored part (simple bodies agree to 7 digits).
+- A native thread or shell is not wrapped: see "Dropping to the raw API" (and add the wrapper here if you needed it
+  twice).

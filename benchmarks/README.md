@@ -108,8 +108,9 @@ and an outlet flange, an eccentric reducer, a sensor boss at 45 degrees on the b
 lugs. The Fusion build has 27 features on 25 sketches (17 extrudes, 3 lofts, 2 revolves, 3 chamfers, one fillet loop and
 one circular pattern), plus 26 construction planes, 3 construction axes and 45 named user parameters.
 
-Revolve, loft, construction axes, an angled work plane and the circular pattern are not wrapped by `fusion_fast`, so
-this is the task that exercises the skill's fallback to the raw API (`m.root`, `m.design`). One trap on the way: in a
+Revolve, loft, construction axes, an angled work plane and the circular pattern were not wrapped by `fusion_fast` v2, so
+this was the task that exercised the skill's fallback to the raw API (`m.root`, `m.design`); v2.1 wraps all of them
+except the angled plane. One trap on the way: in a
 parametric design Fusion refuses a work plane made with `setByPlane` (direct modelling only), so the tilted plane for
 the boss has to be built from two offset planes, an axis and an angle.
 
@@ -185,7 +186,8 @@ Design notes for anyone extending this:
   `grade.py` and `golden.py` now read the very-high-accuracy volume. The first three tasks were graded with `body.volume`
   before this change; rebuilding their golden models shows the two accuracies agree to better than 0.01 ppm on those
   simple parts (and match the stored references within 0.02 ppm), so their grading is unchanged. The helper's own
-  `report` also reads `body.volume`; its default 0.2 % tolerance absorbs the difference.
+  `report` read `body.volume` in v2, where its default 0.2 % tolerance absorbed the difference; v2.1 reads the
+  very-high-accuracy volume too.
 - **The STEP re-import is 0.06 % larger than Fusion's own volume** for this part, so `step_check.py` keeps its 0.2 %
   tolerance and the strict comparisons stay inside Fusion.
 - **A boolean comparison of two STEP solids was tried and dropped.** OpenCascade returns garbled pieces (even negative

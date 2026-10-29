@@ -135,17 +135,19 @@ m.fillet("Corner_Fillet", ("corner_r", m.edges(parallel="z", x=[0, 90], y=[0, 28
 ```
 
 [`SKILL.md`](skills/fusion-fast-modeling/SKILL.md) has the full helper cheat sheet: sketches on world planes and faces,
-extrude and cut, hole sets, patterns and mirrors, edge and face selection by position, fillets and chamfers, `report`,
-`probe`, `what_if`, export and views.
+extrude and cut, hole sets, rectangular and circular patterns, mirrors, sweeps along dimensioned routes, lofts,
+revolves, construction axes, edge and face selection by position, fillets and chamfers, `report`, `probe`, `what_if`,
+export and views.
 
 ## Limitations
 
 - Tested on Windows 11 with Fusion 2705.1.25 and Claude Code only. The helper uses just the Fusion API, but other
   platforms are untested.
 - It drives the **local desktop MCP server** (`fusion_mcp_execute` scripts), not Autodesk's cloud MCP servers.
-- Wrapped: sketches, extrude, cut, holes, patterns, mirror, fillets, chamfers, probes, export, views. Not wrapped:
-  native threads, shell, revolve, loft and sweep. For those, `SKILL.md` tells Claude to use the raw API inside the same
-  build file and to finish with a checkpoint.
+- Wrapped: sketches, extrude, cut, holes, rectangular and circular patterns, mirror, sweep (with a dimensioned
+  straight-and-arc route), loft, revolve, construction axes, fillets, chamfers, probes, export, views. Not wrapped:
+  native threads and shell. For those, `SKILL.md` tells Claude to use the raw API inside the same build file and to
+  finish with a checkpoint.
 - The benchmark covers three simple parts. See [benchmarks/README.md](benchmarks/README.md) for what it does and does
   not show.
 - Geometry checks do not prove strength, fit or printability. Review parts before you manufacture them.

@@ -39,12 +39,16 @@ REGISTRY = "_fusion_fast_documents"
 SNAPSHOTS = "_fusion_fast_snapshots"  # per model: the other open documents (name, saved, modified) when it was made
 AXIS = {"x": 0, "y": 1, "z": 2}
 PLANE_NORMAL = {"xy": 2, "xz": 1, "yz": 0}
+NORMAL_PLANE = {"x": "yz", "y": "xz", "z": "xy"}  # world axis -> the world plane perpendicular to it
 OPERATIONS = {"new": adsk.fusion.FeatureOperations.NewBodyFeatureOperation,
               "join": adsk.fusion.FeatureOperations.JoinFeatureOperation,
               "cut": adsk.fusion.FeatureOperations.CutFeatureOperation,
               "intersect": adsk.fusion.FeatureOperations.IntersectFeatureOperation}
 HORIZONTAL = adsk.fusion.DimensionOrientations.HorizontalDimensionOrientation
 VERTICAL = adsk.fusion.DimensionOrientations.VerticalDimensionOrientation
+# body.volume alone read 0.09 % low on a complex swept, lofted and bored part (simple bodies agree to 7 digits);
+# getPhysicalProperties at this accuracy did not.
+ACCURACY = adsk.fusion.CalculationAccuracy.VeryHighCalculationAccuracy
 
 
 def P(x, y, z=0.0):
@@ -178,23 +182,30 @@ class Model:
         return self.body(body) if body is None or isinstance(body, str) else body
 
     # ---- sketches -----------------------------------------------------------------------------------------
+    def _offset_plane(self, key, at):
+        """The world plane "xy" / "xz" / "yz", or a construction plane `at` mm (number or expression) along its normal."""
+        base = {"xy": self.root.xYConstructionPlane, "xz": self.root.xZConstructionPlane,
+                "yz": self.root.yZConstructionPlane}[key]
+        level = self.mm(at)
+        if abs(level) <= TOL:
+            return base
+        axis = PLANE_NORMAL[key]
+        direction = base.geometry.normal.asArray()[axis]
+        plane_input = self.root.constructionPlanes.createInput()
+        plane_input.setByOffset(base, vi(at if direction > 0 else f"-({expr(at)})"))
+        offset = self.root.constructionPlanes.add(plane_input)
+        if abs(offset.geometry.origin.asArray()[axis] / CM - level) > 1e-3:
+            raise RuntimeError("Offset plane landed on the wrong side of the origin")
+        return offset
+
     def sketch(self, plane, at=0, name=None):
         """Sketch on "xy" / "xz" / "yz" (optionally offset along its normal by `at`, number or expression),
         or on a planar axis-aligned BRepFace."""
         if isinstance(plane, str):
             key = plane.lower()
             axis = PLANE_NORMAL[key]
-            base = {"xy": self.root.xYConstructionPlane, "xz": self.root.xZConstructionPlane,
-                    "yz": self.root.yZConstructionPlane}[key]
             level = self.mm(at)
-            if abs(level) > TOL:
-                direction = base.geometry.normal.asArray()[axis]
-                plane_input = self.root.constructionPlanes.createInput()
-                plane_input.setByOffset(base, vi(at if direction > 0 else f"-({expr(at)})"))
-                base = self.root.constructionPlanes.add(plane_input)
-                if abs(base.geometry.origin.asArray()[axis] / CM - level) > 1e-3:
-                    raise RuntimeError("Offset plane landed on the wrong side of the origin")
-            target = base
+            target = self._offset_plane(key, at)
         else:
             face_plane = adsk.core.Plane.cast(plane.geometry)
             if not face_plane:
@@ -230,6 +241,26 @@ class Model:
         else:
             feature_input.setOneSideExtent(adsk.fusion.DistanceExtentDefinition.create(vi(distance)), direction)
 
+    @staticmethod
+    def _finish(feature, name, body, op, sketches):
+        """Name a finished feature (and the body it made) and hide the sketches it used."""
+        if name:
+            feature.name = name
+        if body and op == "new":
+            feature.bodies.item(0).name = body
+        for sketch in sketches:
+            sketch.s.isLightBulbOn = False
+        return feature
+
+    @staticmethod
+    def _profile(sketch, index=None):
+        """The closed profile of a sketch: its only one, or profile `index` when it has several."""
+        profiles = sketch.s.profiles
+        if index is None and profiles.count != 1:
+            areas = [round(profiles.item(i).areaProperties().area / CM ** 2, 1) for i in range(profiles.count)]
+            raise RuntimeError(f"Sketch {sketch.s.name!r} has {profiles.count} profiles (areas in mm2: {areas}); pass index=<n>")
+        return profiles.item(index or 0)
+
     def extrude(self, sketch, distance, op="new", toward="+", name=None, body=None, profiles="all"):
         """Extrude every profile of `sketch` (or the listed profile indexes) by `distance` mm / expression, or
         distance="all" to run through everything. op: new | join | cut | intersect. toward: "+" | "-" | "sym"."""
@@ -240,13 +271,7 @@ class Model:
             raise RuntimeError("The sketch has no closed profile to extrude")
         feature_input = self.root.features.extrudeFeatures.createInput(chosen, OPERATIONS[op])
         self.set_extent(feature_input, distance, toward, sketch)
-        feature = self.root.features.extrudeFeatures.add(feature_input)
-        if name:
-            feature.name = name
-        if body and op == "new":
-            feature.bodies.item(0).name = body
-        sketch.s.isLightBulbOn = False
-        return feature
+        return self._finish(self.root.features.extrudeFeatures.add(feature_input), name, body, op, [sketch])
 
     def holes(self, plane, points, diameter, depth="all", toward="-", at=0, name="Holes"):
         """Round through (or blind) holes at world 2D `points` [(u, v), ...] drilled from the sketch plane toward
@@ -256,32 +281,100 @@ class Model:
             sketch.circle(u, v, diameter)
         return self.extrude(sketch, depth, op="cut", toward=toward, name=name)
 
-    def axis(self, key):
-        return {"x": self.root.xConstructionAxis, "y": self.root.yConstructionAxis,
-                "z": self.root.zConstructionAxis}[key]
+    def sweep(self, profile, path, op="new", name=None, body=None, index=None):
+        """Sweep the closed profile of sketch `profile` along the connected curves of sketch `path` (Sketch.route draws
+        one). The profile sketch must lie on a plane perpendicular to the path at its start; it is hidden afterwards,
+        the path stays visible because it is often swept again. op: new | join | cut | intersect."""
+        curves = adsk.core.ObjectCollection.create()
+        for curve in path.s.sketchCurves:
+            if not curve.isConstruction:
+                curves.add(curve)
+        sweeps = self.root.features.sweepFeatures
+        sweep_input = sweeps.createInput(self._profile(profile, index), self.root.features.createPath(curves, True),
+                                         OPERATIONS[op])
+        return self._finish(sweeps.add(sweep_input), name, body, op, [profile])
 
-    def pattern(self, features, axis, count, spacing, axis2=None, count2=None, spacing2=None, name=None):
-        """Rectangular pattern of one feature or a list, along a world axis ("x", "y", "z"), optionally two ways."""
+    def loft(self, sketches, op="new", name=None, body=None):
+        """Loft through the closed profile of each sketch in order (two or more). Two sections give a straight-sided
+        (ruled) solid: a cone, or a taper between circles on parallel planes whose centres may differ."""
+        lofts = self.root.features.loftFeatures
+        loft_input = lofts.createInput(OPERATIONS[op])
+        for sketch in sketches:
+            loft_input.loftSections.add(self._profile(sketch))
+        loft_input.isSolid = True
+        return self._finish(lofts.add(loft_input), name, body, op, sketches)
+
+    def revolve(self, sketch, axis, op="new", name=None, body=None, index=None):
+        """Revolve the closed profile of `sketch` 360 degrees about `axis`: a line of the same sketch (an edge of the
+        profile works), a world axis "x" / "y" / "z", or an axis from m.axis(...)."""
+        revolves = self.root.features.revolveFeatures
+        revolve_input = revolves.createInput(self._profile(sketch, index), self._axis_object(axis), OPERATIONS[op])
+        revolve_input.setAngleExtent(False, adsk.core.ValueInput.createByString("360 deg"))
+        return self._finish(revolves.add(revolve_input), name, body, op, [sketch])
+
+    def axis(self, key, at=None, name=None):
+        """World construction axis "x" / "y" / "z" through the origin, or - with at=(a, b) - the axis parallel to it
+        through that point, given as its other two world coordinates in x, y, z order: ("z", at=(x, y)),
+        ("y", at=(x, z)), ("x", at=(y, z)). Numbers are mm, strings expressions."""
+        if at is None:
+            return {"x": self.root.xConstructionAxis, "y": self.root.yConstructionAxis,
+                    "z": self.root.zConstructionAxis}[key]
+        others = [k for k in "xyz" if k != key]  # the world axes the two coordinates are measured along
+        axes = self.root.constructionAxes
+        axis_input = axes.createInput()
+        axis_input.setByTwoPlanes(*(self._offset_plane(NORMAL_PLANE[k], value) for k, value in zip(others, at)))
+        axis = axes.add(axis_input)
+        origin, direction = axis.geometry.origin.asArray(), axis.geometry.direction.asArray()
+        if abs(abs(direction[AXIS[key]]) - 1) > 1e-6 or any(abs(origin[AXIS[k]] / CM - self.mm(value)) > 1e-3
+                                                              for k, value in zip(others, at)):
+            raise RuntimeError(f"Axis along {key} through {at} came out wrong: origin {origin}, direction {direction}")
+        if name:
+            axis.name = name
+        return axis
+
+    def _axis_object(self, axis):
+        """A world axis letter becomes its construction axis; anything else (m.axis(...), a sketch line) passes through."""
+        return self.axis(axis) if isinstance(axis, str) else axis
+
+    @staticmethod
+    def _collection(features):
         entities = adsk.core.ObjectCollection.create()
         for feature in (features if isinstance(features, (list, tuple)) else [features]):
             entities.add(feature)
+        return entities
+
+    def pattern(self, features, axis, count, spacing, axis2=None, count2=None, spacing2=None, name=None):
+        """Rectangular pattern of one feature or a list, along a world axis ("x", "y", "z"), optionally two ways."""
         patterns = self.root.features.rectangularPatternFeatures
-        pattern_input = patterns.createInput(entities, self.axis(axis), adsk.core.ValueInput.createByString(count_expr(count)),
-                                             vi(spacing), adsk.fusion.PatternDistanceType.SpacingPatternDistanceType)
+        pattern_input = patterns.createInput(self._collection(features), self._axis_object(axis),
+                                             adsk.core.ValueInput.createByString(count_expr(count)), vi(spacing),
+                                             adsk.fusion.PatternDistanceType.SpacingPatternDistanceType)
         if axis2:
-            pattern_input.setDirectionTwo(self.axis(axis2), adsk.core.ValueInput.createByString(count_expr(count2)), vi(spacing2))
+            pattern_input.setDirectionTwo(self._axis_object(axis2), adsk.core.ValueInput.createByString(count_expr(count2)),
+                                          vi(spacing2))
+        feature = patterns.add(pattern_input)
+        if name:
+            feature.name = name
+        return feature
+
+    def circular_pattern(self, features, axis, count, name=None):
+        """Circular pattern of one feature or a list: `count` copies (a number or a parameter expression) spread evenly
+        over 360 degrees about `axis` - a world axis "x" / "y" / "z" through the origin, or m.axis(..., at=(a, b))."""
+        patterns = self.root.features.circularPatternFeatures
+        pattern_input = patterns.createInput(self._collection(features), self._axis_object(axis))
+        pattern_input.quantity = adsk.core.ValueInput.createByString(count_expr(count))
+        pattern_input.totalAngle = adsk.core.ValueInput.createByString("360 deg")
+        pattern_input.isSymmetric = False
         feature = patterns.add(pattern_input)
         if name:
             feature.name = name
         return feature
 
     def mirror(self, features, plane, name=None):
-        entities = adsk.core.ObjectCollection.create()
-        for feature in (features if isinstance(features, (list, tuple)) else [features]):
-            entities.add(feature)
         plane_object = {"xy": self.root.xYConstructionPlane, "xz": self.root.xZConstructionPlane,
                         "yz": self.root.yZConstructionPlane}[plane.lower()]
-        feature = self.root.features.mirrorFeatures.add(self.root.features.mirrorFeatures.createInput(entities, plane_object))
+        mirrors = self.root.features.mirrorFeatures
+        feature = mirrors.add(mirrors.createInput(self._collection(features), plane_object))
         if name:
             feature.name = name
         return feature
@@ -457,7 +550,8 @@ class Model:
         sketches, a warning if the user's other documents changed) and raise if a check fails, naming `stage` so a
         failure says where it happened.
         expect_size = world bounding box (x, y, z) mm of all bodies, within `tol` mm; expect_volume in mm3 within
-        `vol_tol` (0.2 % by default: tight enough to see a missing hole or fillet, so compute it by hand)."""
+        `vol_tol` (0.2 % by default: tight enough to see a missing hole or fillet, so compute it by hand). Volumes are
+        read at very high accuracy: body.volume alone read 0.09 % low on a complex swept, lofted and bored part."""
         import json
         bodies = []
         lo, hi = [1e18] * 3, [-1e18] * 3
@@ -467,7 +561,8 @@ class Model:
             lo, hi = [min(a, b) for a, b in zip(lo, low)], [max(a, b) for a, b in zip(hi, high)]
             bodies.append({"name": body.name, "solid": body.isSolid, "min": [round(c, 3) for c in low],
                            "size": [round(h - l, 3) for l, h in zip(low, high)],
-                           "volume_mm3": round(body.volume / CM ** 3, 2), "faces": body.faces.count})
+                           "volume_mm3": round(body.getPhysicalProperties(ACCURACY).volume / CM ** 3, 2),
+                           "faces": body.faces.count})
         timeline = self.design.timeline
         unhealthy = [f"{timeline.item(i).name}: {timeline.item(i).errorOrWarningMessage}" for i in range(timeline.count)
                      if timeline.item(i).healthState != adsk.fusion.FeatureHealthStates.HealthyFeatureHealthState]
@@ -682,3 +777,74 @@ class Sketch:
         self.m.name_param(dimension.parameter, f"{self.tag}_dia")
         self._anchor(circle.centerSketchPoint, self._coords(u_e, v_e))
         return circle
+
+    def _direction(self, spec):
+        """A world direction such as "+x" or "-z" -> (du, dv) in this sketch's two world axes."""
+        axes = {"xyz"[self.ui]: (1, 0), "xyz"[self.vi]: (0, 1)}
+        letter = spec.lstrip("+-").lower()
+        if letter not in axes:
+            raise RuntimeError(f"Direction {spec!r} is not in this plane; use + or - with one of {sorted(axes)}")
+        sign = -1 if spec.startswith("-") else 1
+        return tuple(sign * c for c in axes[letter])
+
+    def _orientation(self, key):
+        return HORIZONTAL if self.axis_of[key][0] == 0 else VERTICAL
+
+    def _along(self, line, key):
+        """Constrain a line to run along the world axis `key` ("u" or "v") of this plane."""
+        constraints = self.s.geometricConstraints
+        (constraints.addHorizontal if self.axis_of[key][0] == 0 else constraints.addVertical)(line)
+
+    def _aligned(self, p, q, key):
+        """Constrain two sketch points to be separated only along the world axis `key` ("u" or "v") of this plane."""
+        constraints = self.s.geometricConstraints
+        (constraints.addHorizontalPoints if self.axis_of[key][0] == 0 else constraints.addVerticalPoints)(p, q)
+
+    def _measure(self, a, b, key, expression, role):
+        """Named driving dimension between two sketch points along the world axis `key`. The expression is a length,
+        not a coordinate: a negative dimension makes Fusion flip the geometry to the other side."""
+        self._dimension(a, b, self._orientation(key), expression, 1, role)
+
+    def route(self, start, legs, radius):
+        """Fully dimensioned path of straight legs joined by tangent arcs: a pipe or cable run to sweep along.
+        start: world (u, v) of the first point.  legs: [(direction, length), ...], a world direction in this plane
+        ("+x", "-z", ...) and the straight length between the arcs; consecutive legs must turn 90 degrees.
+        radius: the bend radius of every arc. Numbers are mm, strings expressions. Returns the curves in order:
+
+            path = m.sketch("xz", name="Path")
+            path.route((0, 0), [("+x", "run_a"), ("+z", "run_b")], radius="bend")"""
+        directions = [self._direction(spec) for spec, _ in legs]
+        keys = ["u" if du else "v" for du, _ in directions]  # the world axis each leg runs along
+        if any(a == b for a, b in zip(keys, keys[1:])):
+            raise RuntimeError("Consecutive legs must turn 90 degrees: alternate between the two axes of the plane")
+        lines, arcs = self.s.sketchCurves.sketchLines, self.s.sketchCurves.sketchArcs
+        radius_e = expr(radius)
+        r = self.m.mm(radius_e)
+        here = (self.m.mm(expr(start[0])), self.m.mm(expr(start[1])))
+        curves, joint = [], None
+        for i, ((_, length), (du, dv), key) in enumerate(zip(legs, directions, keys)):
+            length_e = expr(length)
+            end = (here[0] + du * self.m.mm(length_e), here[1] + dv * self.m.mm(length_e))
+            leg = lines.addByTwoPoints(joint if joint is not None else self.point(*here), self.point(*end))
+            self._along(leg, key)
+            self._measure(leg.startSketchPoint, leg.endSketchPoint, key, length_e, f"leg{i + 1}")
+            curves.append(leg)
+            if i == 0:
+                self._anchor(leg.startSketchPoint, self._coords(expr(start[0]), expr(start[1])))
+            if i + 1 == len(legs):
+                break
+            nu, nv = directions[i + 1]
+            centre = (end[0] + nu * r, end[1] + nv * r)
+            far = (centre[0] + du * r, centre[1] + dv * r)
+            middle = (centre[0] + (du - nu) * r * math.sqrt(0.5), centre[1] + (dv - nv) * r * math.sqrt(0.5))
+            arc = arcs.addByThreePoints(leg.endSketchPoint, self.point(*middle), self.point(*far))
+            # Fusion keeps arcs counter-clockwise in sketch space, so an arc drawn clockwise has its start and end
+            # swapped: the end that continues the path is the one farther from the leg.
+            joint = max((arc.startSketchPoint, arc.endSketchPoint),
+                        key=lambda p: p.geometry.distanceTo(leg.endSketchPoint.geometry))
+            self._aligned(leg.endSketchPoint, arc.centerSketchPoint, keys[i + 1])  # centre beside the bend start ...
+            self._aligned(arc.centerSketchPoint, joint, key)                        # ... arc end level with the centre
+            self._measure(leg.endSketchPoint, arc.centerSketchPoint, keys[i + 1], radius_e, f"bend{i + 1}")
+            curves.append(arc)
+            here = far
+        return curves
