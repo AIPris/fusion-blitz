@@ -148,7 +148,8 @@ the user's documents, and never use the MCP `document close` action (it closes w
   there is no export option to change: do not spend time on it. Check an export by re-importing it, not by reading
   raw coordinates.
 - Model parameters that hold bare numbers (taper 0 deg, fillet tangency weight 1, a pattern's unused second direction
-  count and spacing) are inert Fusion defaults, not hard-coded dimensions.
+  count and spacing, the `_xref` / `_yref` reference offsets below) are inert Fusion defaults or helper constants, not
+  hard-coded dimensions: leave them as they are.
 - Fusion keeps sketch arcs counter-clockwise, so an arc drawn clockwise comes back with its start and end swapped:
   continue from the end that is farther from the previous point. `sk.route` constrains each bend by aligning the arc's
   end points with its centre and dimensioning the radius.
