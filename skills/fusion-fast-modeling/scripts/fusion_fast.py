@@ -32,6 +32,10 @@ PROBE_MM = 0.05  # how far beside an edge to test whether the surface turns outw
 # measured from the same origin point, e.g. two holes at the same height. Geometry is therefore drawn this far off
 # its target; the dimension expressions then pull it exactly into place.
 NUDGE = 0.013  # mm
+# A coordinate that is 0 now but follows a parameter must stay dimensioned, yet a 0-length dimension is avoided (it
+# would also come back whenever the parameter is restored to 0). It is measured from a reference point this far before
+# the origin instead (Sketch._reference), as `coordinate + ZERO_REFERENCE_MM`.
+ZERO_REFERENCE_MM = 100
 # "Through all" is a long finite cut. A one-sided setAllExtent cut starts failing with "no target body to cut"
 # once a join feature has been added to the body, even far from the join; a finite distance does not.
 THROUGH_MM = 1000
@@ -149,6 +153,10 @@ class Model:
             if known:
                 return known.unit
         return ""
+
+    def depends_on_parameter(self, text):
+        """True if the expression names a parameter of the design, so its value can change after it is built."""
+        return any(self.design.allParameters.itemByName(name) for name in re.findall(r"(?<![\w.])[A-Za-z_]\w*", text))
 
     def params(self, **values):
         """Create or update user parameters: params(width=40, thickness="3 mm", cols="4", half="width / 2").
@@ -741,6 +749,7 @@ class Sketch:
         self.m, self.s, self.normal_axis, self.level = model, sketch, normal_axis, level_mm
         self.ui, self.vi = [a for a in range(3) if a != normal_axis]
         self.tag = re.sub(r"\W", "_", sketch.name)
+        self._references = {}  # dimension orientation -> the reference point of _reference, made on first use
         origin = sketch.sketchToModelSpace(P(0, 0, 0)).asArray()
         off_axis = [origin[a] / CM for a in range(3) if a != normal_axis]
         if any(abs(c) > 1e-3 for c in off_axis):
@@ -780,21 +789,50 @@ class Sketch:
         dimension.parameter.expression = expression if value >= 0 else f"-({expression})"
         self.m.name_param(dimension.parameter, f"{self.tag}_{role}")
 
+    def _is_constant_zero(self, expression, value):
+        return abs(value) < TOL and not self.m.depends_on_parameter(expression)
+
+    def _reference(self, orientation):
+        """A sketch point ZERO_REFERENCE_MM before the origin along one sketch axis, made once per axis and pinned by
+        a constant dimension. A coordinate that is 0 now but names a parameter is measured from it (a 0-length dimension
+        is avoided, and an alignment to the origin would drop the parameter): `coordinate + ZERO_REFERENCE_MM` follows
+        the parameter on either side of the origin and is never 0 for any value above -ZERO_REFERENCE_MM."""
+        if orientation not in self._references:
+            origin, constraints = self.s.originPoint, self.s.geometricConstraints
+            horizontal = orientation == HORIZONTAL
+            drawn = -(ZERO_REFERENCE_MM + NUDGE) * CM  # off target by NUDGE like everything else, see NUDGE
+            reference = self.s.sketchPoints.add(P(drawn, 0, 0) if horizontal else P(0, drawn, 0))
+            (constraints.addHorizontalPoints if horizontal else constraints.addVerticalPoints)(origin, reference)
+            self._dimension(origin, reference, orientation, f"{ZERO_REFERENCE_MM} mm", ZERO_REFERENCE_MM,
+                            "xref" if horizontal else "yref")
+            self._references[orientation] = reference
+        return self._references[orientation]
+
+    def _dimension_from_origin(self, point, orientation, expression, value, role):
+        """Dimension one coordinate of a sketch point from the origin, or from the reference when it is 0 now."""
+        if abs(value) < TOL:
+            self._dimension(self._reference(orientation), point, orientation,
+                            f"({expression}) + {ZERO_REFERENCE_MM} mm", ZERO_REFERENCE_MM, role)
+        else:
+            self._dimension(self.s.originPoint, point, orientation, expression, value, role)
+
     def _anchor(self, point, coords):
-        """Fix a sketch point relative to the origin: dimension each coordinate, or align it when it is 0."""
+        """Fix a sketch point relative to the origin: dimension each coordinate, or align it when it is a constant 0
+        (a coordinate that is 0 now but names a parameter is dimensioned, see _reference)."""
         origin, constraints = self.s.originPoint, self.s.geometricConstraints
         (x_expr, x_val), (y_expr, y_val) = coords
-        if abs(x_val) < TOL and abs(y_val) < TOL:
+        x_zero, y_zero = self._is_constant_zero(x_expr, x_val), self._is_constant_zero(y_expr, y_val)
+        if x_zero and y_zero:
             constraints.addCoincident(point, origin)
             return
-        if abs(x_val) < TOL:
+        if x_zero:
             constraints.addVerticalPoints(origin, point)
         else:
-            self._dimension(origin, point, HORIZONTAL, x_expr, x_val, "x")
-        if abs(y_val) < TOL:
+            self._dimension_from_origin(point, HORIZONTAL, x_expr, x_val, "x")
+        if y_zero:
             constraints.addHorizontalPoints(origin, point)
         else:
-            self._dimension(origin, point, VERTICAL, y_expr, y_val, "y")
+            self._dimension_from_origin(point, VERTICAL, y_expr, y_val, "y")
 
     def rect(self, u, v, w, h, center=False):
         """Rectangle with min corner (u, v) - or centre, with center=True - size w x h, fully dimensioned."""

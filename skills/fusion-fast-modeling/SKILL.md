@@ -154,6 +154,10 @@ the user's documents, and never use the MCP `document close` action (it closes w
   end points with its centre and dimensioning the radius.
 - A negative distance dimension makes Fusion flip the geometry to the other side of its anchor: dimension lengths,
   not signed coordinates.
+- A sketch coordinate that is 0 now but names a parameter (`"offset"` while offset = 0, `"width - width0"`) must keep
+  following it, so it is not aligned to the origin and never dimensioned as 0. The helper measures it from a reference
+  point 100 mm before the origin (parameters `<sketch>_xref` / `_yref`) as `coordinate + 100 mm`. A constant 0 (`0`,
+  `"0 mm"`) still uses an alignment, so `rect(0, 0, ...)` builds as before.
 - Dimensioning a sketch point also moves the points connected to it, so the over-constraint trap above reaches
   connected lines too: two polygon vertices at the same height fail unless each starts a different distance off.
   `sk.polygon` draws vertex `i` at `(i + 1) * 0.013` mm off its target.
